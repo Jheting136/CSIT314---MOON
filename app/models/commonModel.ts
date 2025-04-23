@@ -12,6 +12,11 @@ export class DataEntity {
       for (const f of filters) {
         query = query.filter(f.column, f.operator, f.value);
         // you can also use .eq(), .neq(), etc. depending on your needs
+        // expects filters in format shown below
+        //const filters = [
+        //{ column: 'status', operator: 'eq', value: 'active' },
+        //{ column: 'age', operator: 'gte', value: 18 },
+        //];
       }
     }
 
