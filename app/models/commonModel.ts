@@ -4,29 +4,59 @@ export class DataEntity {
   static async getData(
     table: string,
     columns: string = '*',
-    filters?: { column: string, operator: string, value: any }[]
-  ): Promise<any[]> {
-    let query = supabase.from(table).select(columns);
+    filters?: { column: string, operator: string, value: any }[],
+    page?: number,
+    pageSize?: number
+  ): Promise<{ data: any[], count: number }> {
+    let query = supabase
+      .from(table)
+      .select(columns, { count: 'exact' }); // ✅ count requested
 
+    // Apply filters
     if (filters) {
       for (const f of filters) {
         query = query.filter(f.column, f.operator, f.value);
-        // you can also use .eq(), .neq(), etc. depending on your needs
-        // expects filters in format shown below
-        //const filters = [
-        //{ column: 'status', operator: 'eq', value: 'active' },
-        //{ column: 'age', operator: 'gte', value: 18 },
-        //];
       }
     }
 
-    const { data, error } = await query;
+    // Get count first
+    const { data: allData, count, error: countError } = await query;
 
-    if (error) {
-      console.error(`Error fetching from ${table}:`, error.message);
-      throw error;
+    if (countError) {
+      console.error(`Error fetching count from ${table}:`, countError.message);
+      throw countError;
     }
 
-    return data || [];
+    // Pagination logic
+    if (page !== undefined && pageSize !== undefined) {
+      const offset = (page - 1) * pageSize;
+      if (offset >= count) {
+        // Avoid invalid offset
+        return { data: [], count };
+      }
+
+      query = supabase
+        .from(table)
+        .select(columns)
+        .range(offset, offset + pageSize - 1);
+
+      // Reapply filters for paginated query
+      if (filters) {
+        for (const f of filters) {
+          query = query.filter(f.column, f.operator, f.value);
+        }
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error(`Error fetching paged data from ${table}:`, error.message);
+        throw error;
+      }
+
+      return { data: data || [], count };
+    }
+
+    return { data: allData || [], count };
   }
 }
