@@ -5,6 +5,8 @@ export interface CleaningService {
   price: number;
   provider: string;
   location: string;
+  rating: number;
+  services: string[];
 }
 
 const listings: CleaningService[] = [
@@ -15,6 +17,8 @@ const listings: CleaningService[] = [
     price: 60,
     provider: "Jane D.",
     location: "San Francisco, CA",
+    rating: 4.5,
+    services: ["General Cleaning", "Kitchen Cleaning", "Bathroom Cleaning"]
   },
   {
     id: 2,
@@ -23,7 +27,19 @@ const listings: CleaningService[] = [
     price: 120,
     provider: "Mike C.",
     location: "Oakland, CA",
+    rating: 4.8,
+    services: ["Deep Cleaning", "Window Cleaning", "Carpet Cleaning"]
   },
+  {
+    id: 3,
+    title: "Office Cleaning",
+    description: "Professional office cleaning services.",
+    price: 90,
+    provider: "Sarah M.",
+    location: "San Jose, CA",
+    rating: 4.2,
+    services: ["Office Cleaning", "Commercial Cleaning", "Floor Maintenance"]
+  }
 ];
 
 export const getAllListings = (): Promise<CleaningService[]> => {
