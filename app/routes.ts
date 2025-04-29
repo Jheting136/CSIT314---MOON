@@ -5,5 +5,6 @@ export default [
   route("listings", "routes/ListingsPage.tsx"),
   route("login", "routes/LoginPage.tsx"),
   route("adminView", "routes/adminView.tsx"),
+  route("viewUserProfile/:id", "routes/viewUserProfile.tsx"),
   route("test", "routes/testpage.tsx"),
 ] satisfies RouteConfig;

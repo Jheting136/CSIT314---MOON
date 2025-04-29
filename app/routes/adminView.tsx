@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
+
 import { commonController } from '../controllers/commonController';
 import { TextField, Button, List, ListItem, Typography, Container, Box } from '@mui/material';
 
 export default function Homeowners() {
   const [homeowners, setHomeowners] = useState([]);
+  const navigate = useNavigate();
+
   const [page, setPage] = useState(1); // current page
   const [pageSize, setPageSize] = useState(10); // items per page
   const [totalPages, setTotalPages] = useState(0); // total number of pages
@@ -24,7 +28,7 @@ export default function Homeowners() {
 
     const result = await commonController.fetchTableData(
       'users',
-      'name, email, account_type, created_at',
+      'id, name, email, account_type, created_at',
       filters,
       page,
       pageSize
@@ -61,12 +65,20 @@ export default function Homeowners() {
       <List>
               {homeowners.length > 0 ? (
                 homeowners.map((item, index) => (
-                  <ListItem key={index} sx={{ padding: '1rem', borderBottom: '1px solid #ddd' }}>
+                  <ListItem
+                    key={index}
+                    sx={{ padding: '1rem', borderBottom: '1px solid #ddd', cursor: 'pointer' }}
+                    onClick={() => navigate(`/viewUserProfile/${item.id}`)} // ✅ Dynamic navigation
+                  >
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                       {item.name}
                     </Typography>
                     <Typography variant="body1">{item.email}</Typography>
-                    <Typography variant="caption" color="textSecondary">
+                    <Typography
+                      variant="caption"
+                      color="textSecondary"
+                      className="text-sm dark:text-white"
+                    >
                       {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
                     </Typography>
                   </ListItem>
