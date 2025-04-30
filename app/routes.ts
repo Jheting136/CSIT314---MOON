@@ -7,4 +7,9 @@ export default [
   route("adminView", "routes/adminView.tsx"),
   route("viewUserProfile/:id", "routes/viewUserProfile.tsx"),
   route("test", "routes/testpage.tsx"),
+  route("signup", "routes/SignupPage.tsx"),
+  route("admin", "routes/admin.tsx"),
+  route("cleaner", "routes/cleaner.tsx"),
+  route("homeowner", "routes/homeowner.tsx"),
+
 ] satisfies RouteConfig;
