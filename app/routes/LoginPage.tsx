@@ -1,6 +1,6 @@
+// routes/LoginPage.tsx (Boundary)
 import { useState } from "react";
-import { supabase } from "../lib/supabaseClient"; 
-import { Link } from "react-router-dom";
+import { handleLogin } from "../controllers/loginController"; // Control
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -9,46 +9,8 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError("Login failed: " + error.message);
-      return;
-    }
-
-     // Get logged-in user's ID
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    setError("Failed to retrieve user info.");
-    return;
-  }
-
-  // Fetch user's role from the users table
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("account_type")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile) {
-    setError("Unable to fetch user role.");
-    return;
-  }
-
-    //Redirect based on role
-    const role = profile.account_type;
-    if (role === "admin") {
-      window.location.href = "/admin";
-    } else if (role === "cleaner") {
-      window.location.href = "/cleaner";
-    } else {
-      window.location.href = "/homeowner";
-    }
+    const errorMsg = await handleLogin(email, password);
+    if (errorMsg) setError(errorMsg);
   };
 
   return (

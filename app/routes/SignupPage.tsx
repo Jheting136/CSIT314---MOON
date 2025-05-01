@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { handleSignup } from "../controllers/signupController";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -8,39 +8,17 @@ export default function SignupPage() {
   const [accountType, setAccountType] = useState("homeowner");
   const [error, setError] = useState("");
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (signUpError || !data.user) {
-      setError(signUpError?.message || "Signup failed");
-      return;
-    }
-
-    const { error: insertError } = await supabase.from("users").insert({
-      id: data.user.id,
-      email,
-      name,
-      account_type: accountType,
-    });
-
-    if (insertError) {
-      setError(insertError.message);
-      return;
-    }
-
-    window.location.href = "/login";
+    const errorMsg = await handleSignup({ email, password, name, accountType });
+    if (errorMsg) setError(errorMsg);
+    else window.location.href = "/login";
   };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 px-4">
       <form
-        onSubmit={handleSignup}
+        onSubmit={handleSubmit}
         className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 max-w-md w-full"
       >
         <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-white">
@@ -85,15 +63,15 @@ export default function SignupPage() {
         />
 
         <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-        Account Type
+          Account Type
         </label>
         <select
-        value={accountType}
-        onChange={(e) => setAccountType(e.target.value)}
-        className="w-full px-4 py-2 mb-6 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white"
+          value={accountType}
+          onChange={(e) => setAccountType(e.target.value)}
+          className="w-full px-4 py-2 mb-6 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white"
         >
-        <option value="homeowner">Homeowner</option>
-        <option value="cleaner">Cleaner</option>
+          <option value="homeowner">Homeowner</option>
+          <option value="cleaner">Cleaner</option>
         </select>
 
         <button

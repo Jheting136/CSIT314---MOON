@@ -1,0 +1,11 @@
+import { supabase } from "../lib/supabaseClient";
+
+export async function insertUserEntity(user: {
+  id: string;
+  email: string;
+  name: string;
+  account_type: string;
+}): Promise<{ error: string | null }> {
+  const { error } = await supabase.from("users").insert(user);
+  return { error: error?.message || null };
+}
