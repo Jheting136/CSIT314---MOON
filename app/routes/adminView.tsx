@@ -52,7 +52,7 @@ export default function Homeowners() {
     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
       <Paper elevation={3} sx={{ padding: 4 }}>
         <Typography variant="h5" gutterBottom>
-          Homeowners (Page {page} of {totalPages})
+          Users (Page {page} of {totalPages})
         </Typography>
   
         {/* Search Box */}
