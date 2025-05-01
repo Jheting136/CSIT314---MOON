@@ -1,14 +1,54 @@
 import { useState } from "react";
+import { supabase } from "../lib/supabaseClient"; 
+import { Link } from "react-router-dom";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Logging in:", { email, password });
+    setError("");
 
-    // TODO: Add auth logic here (Supabase/Firebase/etc.)
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError("Login failed: " + error.message);
+      return;
+    }
+
+     // Get logged-in user's ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    setError("Failed to retrieve user info.");
+    return;
+  }
+
+  // Fetch user's role from the users table
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("account_type")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    setError("Unable to fetch user role.");
+    return;
+  }
+
+    //Redirect based on role
+    const role = profile.account_type;
+    if (role === "admin") {
+      window.location.href = "/admin";
+    } else if (role === "cleaner") {
+      window.location.href = "/cleaner";
+    } else {
+      window.location.href = "/homeowner";
+    }
   };
 
   return (
@@ -20,6 +60,10 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-white">
           Log In
         </h1>
+
+        {error && (
+          <p className="text-red-500 text-sm mb-4 text-center">{error}</p>
+        )}
 
         <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           Email
@@ -49,6 +93,13 @@ export default function LoginPage() {
         >
           Log In
         </button>
+
+        <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+          Don’t have an account?{" "}
+          <a href="/signup" className="text-blue-600 dark:text-blue-400 hover:underline">
+            Create one
+          </a>
+        </p>
       </form>
     </main>
   );
