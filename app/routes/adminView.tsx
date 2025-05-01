@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-
 import { commonController } from '../controllers/commonController';
-import { TextField, Button, List, ListItem, Typography, Container, Box } from '@mui/material';
+import { TextField, Button, List, ListItem, Typography, Container, Box, Paper } from '@mui/material';
 
 export default function Homeowners() {
   const [homeowners, setHomeowners] = useState([]);
@@ -50,57 +49,72 @@ export default function Homeowners() {
   };
 
   return (
-    <div>
-      <h1>Homeowners (Page {page} of {totalPages})</h1>
-
-      {/* Search Box */}
-      <input
-        type="text"
-        placeholder="Search by name or email"
-        value={searchTerm}
-        onChange={handleSearchChange}
-        style={{ marginBottom: '1rem' }}
-      />
-
-      <List>
-              {homeowners.length > 0 ? (
-                homeowners.map((item, index) => (
-                  <ListItem
-                    key={index}
-                    sx={{ padding: '1rem', borderBottom: '1px solid #ddd', cursor: 'pointer' }}
-                    onClick={() => navigate(`/viewUserProfile/${item.id}`)} // ✅ Dynamic navigation
-                  >
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      {item.name}
-                    </Typography>
-                    <Typography variant="body1">{item.email}</Typography>
-                    <Typography
-                      variant="caption"
-                      color="textSecondary"
-                      className="text-sm dark:text-white"
-                    >
-                      {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
-                    </Typography>
-                  </ListItem>
-                ))
-              ) : (
-                <ListItem>
-                  <Typography>No data found</Typography>
-                </ListItem>
-              )}
-            </List>
-
-      <div style={{ marginTop: '1rem' }}>
-        <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-          Previous
-        </button>
-        <button
-          disabled={page === totalPages}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next
-        </button>
-      </div>
-    </div>
+    <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
+      <Paper elevation={3} sx={{ padding: 4 }}>
+        <Typography variant="h5" gutterBottom>
+          Homeowners (Page {page} of {totalPages})
+        </Typography>
+  
+        {/* Search Box */}
+        <TextField
+          type="text"
+          placeholder="Search by name or email"
+          value={searchTerm}
+          onChange={handleSearchChange}
+          variant="outlined"
+          fullWidth
+          sx={{ marginBottom: '1.5rem' }}
+        />
+  
+        <List sx={{ backgroundColor: '#f9f9f9', borderRadius: '6px' }}>
+          {homeowners.length > 0 ? (
+            homeowners.map((item, index) => (
+              <ListItem
+                key={index}
+                sx={{
+                  padding: '1rem',
+                  borderBottom: '1px solid #ccc',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  cursor: 'pointer',
+                  '&:hover': { backgroundColor: '#eef' }
+                }}
+                onClick={() => navigate(`/viewUserProfile/${item.id}`)}
+              >
+                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                  {item.name}
+                </Typography>
+                <Typography variant="body2">{item.email}</Typography>
+                <Typography
+                  variant="caption"
+                  color="textSecondary"
+                  sx={{ fontStyle: 'italic', mt: 0.5 }}
+                >
+                  {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
+                </Typography>
+              </ListItem>
+            ))
+          ) : (
+            <ListItem>
+              <Typography>No data found</Typography>
+            </ListItem>
+          )}
+        </List>
+  
+        <Box display="flex" justifyContent="space-between" mt={3}>
+          <Button variant="outlined" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+            Previous
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </Box>
+      </Paper>
+    </Container>
   );
 }
