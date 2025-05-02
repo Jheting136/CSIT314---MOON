@@ -1,12 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { commonController } from '../controllers/commonController';
-import { TextField, Button, List, ListItem, Typography, Container, Box, Paper } from '@mui/material';
+import { TextField, Button, List, ListItem, Typography, Container, Box, Paper, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 
 export default function Homeowners() {
   const [homeowners, setHomeowners] = useState([]);
   const navigate = useNavigate();
 
+  //delete dialog
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const handleOpenDialog = (id) => {
+    setSelectedUserId(id);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setSelectedUserId(null);
+    setOpenDialog(false);
+  };
+
+  //pagination
   const [page, setPage] = useState(1); // current page
   const [pageSize, setPageSize] = useState(10); // items per page
   const [totalPages, setTotalPages] = useState(0); // total number of pages
@@ -14,9 +28,6 @@ export default function Homeowners() {
 
   // Dynamically fetch data with the search term
   const loadData = async () => {
-//     const filters = [
-//       { column: 'account_type', operator: 'eq', value: 'homeowner' },
-//     ];
     const filters = [];
 
     // If there's a search term, add it to the filters for dynamic searching
@@ -49,6 +60,7 @@ export default function Homeowners() {
   };
 
   return (
+
     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
       <Paper elevation={3} sx={{ padding: 4 }}>
         <Typography variant="h5" gutterBottom>
@@ -93,6 +105,18 @@ export default function Homeowners() {
                 >
                   {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
                 </Typography>
+                <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenDialog(item.id);
+                    }}
+                    sx={{ marginRight: 2 }}
+                  >
+                    Delete
+                  </Button>
               </ListItem>
             ))
           ) : (
@@ -115,6 +139,27 @@ export default function Homeowners() {
           </Button>
         </Box>
       </Paper>
+
+      <Dialog open={openDialog} onClose={handleCloseDialog}>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogContent>
+              Are you sure you want to delete this user?
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseDialog}>Cancel</Button>
+              <Button
+                color="error"
+                onClick={async () => {
+                  await commonController.deleteTableRow('users', selectedUserId);
+                  handleCloseDialog();
+                  loadData(); // refresh the list
+                }}
+              >
+                Delete
+              </Button>
+            </DialogActions>
+          </Dialog>
+
     </Container>
   );
 }
