@@ -11,3 +11,10 @@ export class commonController {
     return await commonModel.getData(table, columns, filters, page, pageSize);
   }
 }
+
+// TODO- update logic
+// await supabase
+//   .from('users')
+//   .update({ other_column: 'otherValue' })
+//   .eq('some_column', 'someValue')
+//   .select()

@@ -25,4 +25,15 @@ export class commonModel {
 
     return { data, count: count || 0 };
   }
+
+  static async deleteUser(table: string, id: string): Promise<boolean> {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+
+      if (error) {
+        console.error(`Error deleting row from ${table}:`, error.message);
+        return false;
+      }
+
+      return true;
+  }
 }

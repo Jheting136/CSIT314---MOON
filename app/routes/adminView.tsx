@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { commonController } from '../controllers/commonController';
+import { adminViewController } from '../controllers/adminViewController';
 import { TextField, Button, List, ListItem, Typography, Container, Box, Paper, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 
 export default function Homeowners() {
@@ -150,7 +151,7 @@ export default function Homeowners() {
               <Button
                 color="error"
                 onClick={async () => {
-                  await commonController.deleteTableRow('users', selectedUserId);
+                  await adminViewController.deleteUser(selectedUserId);
                   handleCloseDialog();
                   loadData(); // refresh the list
                 }}
