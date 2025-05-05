@@ -51,21 +51,26 @@ export default function ViewUserProfile() {
           <p className="text-red-600 dark:text-red-400">User not found.</p>
         )}
 
-        {/* Profile details */}
-        {!loading && user && (
-          <section className="grid sm:grid-cols-2 gap-6 text-gray-800 dark:text-gray-100">
-            <Info label="Name"   value={user.name} />
-            <Info label="Email"  value={user.email} />
-            <Info
-              label="Role"
-              value={capitalize(user.account_type)}
-            />
-            <Info
-              label="Joined"
-              value={new Date(user.created_at).toLocaleDateString()}
-            />
-          </section>
-        )}
+       {/* Profile details */}
+          {!loading && user && (
+            <>
+              <section className="grid sm:grid-cols-2 gap-6 text-gray-800 dark:text-gray-100">
+                <Info label="Name"   value={user.name} />
+                <Info label="Email"  value={user.email} />
+                <Info label="Role"   value={capitalize(user.account_type)} />
+                <Info label="Joined" value={new Date(user.created_at).toLocaleDateString()} />
+              </section>
+
+              {/* View History button  */}
+              <button
+                onClick={() => nav(`/userHistory/${id}`)}
+                className="mt-8 inline-flex items-center gap-1 px-5 py-2.5 rounded-lg
+                          bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                View&nbsp;History
+              </button>
+            </>
+          )}
       </div>
     </main>
   );
