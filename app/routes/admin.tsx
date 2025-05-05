@@ -1,9 +1,9 @@
+//admin.tsx in BCE
 import { Button } from '@mui/material';
+import { AdminPageController } from '../controllers/adminPageController';
 
 export default function AdminPage() {
-  const goToAdminView = () => {
-    window.location.href = "/adminView"; //simple redirect
-  };
+  const controller = new AdminPageController();
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 px-4">
@@ -11,7 +11,7 @@ export default function AdminPage() {
         Welcome, Admin
       </h1>
 
-      <Button variant="contained" color="primary" onClick={goToAdminView}>
+      <Button variant="contained" color="primary" onClick={controller.handleViewUsers}>
         View List of Users
       </Button>
     </main>
