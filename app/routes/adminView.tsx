@@ -108,6 +108,17 @@ export default function Homeowners() {
                 </Typography>
                 <Button
                     variant="outlined"
+                    size="small"
+                    sx={{ mr: 1 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/editUser/${item.id}`);
+                    }}
+                  >
+                Edit
+              </Button>
+                <Button
+                    variant="outlined"
                     color="error"
                     size="small"
                     onClick={(e) => {

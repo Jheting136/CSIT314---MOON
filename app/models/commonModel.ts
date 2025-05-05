@@ -36,4 +36,20 @@ export class commonModel {
 
       return true;
   }
+  /** ── UPDATE helper ───────────────────────────────────────── */
+static async updateRow<T extends object>(
+  table: string,
+  id: string,
+  values: Partial<T>
+) {
+  const { error, data } = await supabase           // ← keep your import
+    .from(table)
+    .update(values)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;            // updated row
+}
 }
