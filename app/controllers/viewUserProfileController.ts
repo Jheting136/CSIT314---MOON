@@ -1,5 +1,13 @@
 // controllers/viewUserProfileController.ts
 import { supabase } from '../lib/supabaseClient';      
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  account_type: string;
+  created_at: string;
+};
        
 export async function fetchUserById(id: string) {
   if (!id) return null;

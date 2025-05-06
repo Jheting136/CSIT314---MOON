@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { fetchUserById } from '../controllers/viewUserProfileController';
+import { forceResetPassword } from '../controllers/adminResetController';
 
 export default function ViewUserProfile() {
   const { id } = useParams<{ id: string }>();
@@ -22,7 +23,7 @@ export default function ViewUserProfile() {
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-gray-900 flex justify-center items-start p-6">
       <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-lg ring-1 ring-black/5 dark:ring-white/10 p-10">
-        {/* 🔙 Back */}
+        {/*  Back */}
         <button
           onClick={() => nav(-1)}
           className="mb-6 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
@@ -60,15 +61,44 @@ export default function ViewUserProfile() {
                 <Info label="Role"   value={capitalize(user.account_type)} />
                 <Info label="Joined" value={new Date(user.created_at).toLocaleDateString()} />
               </section>
+              <div className="mt-10 flex flex-wrap gap-4">
+               {/* Reset-password button */}
+               <button
+    onClick={async () => {
+      const ok = await forceResetPassword(user.email);
+      alert(ok ? 'Reset link sent!' : 'Failed to reset password');
+    }}
+    className="inline-flex items-center justify-center rounded-lg px-5 py-2.5
+               font-medium shadow-sm transition
+               bg-indigo-600 text-white hover:bg-indigo-700
+               focus:outline-none focus-visible:ring-2
+               focus-visible:ring-indigo-400 dark:focus-visible:ring-indigo-500"
+  >
+    Reset&nbsp;Password
+  </button>
+   {/* -------------  Edit user  --------------------------------------------------- */}
+   <button
+    onClick={() => nav(`/editUser/${id}`)}
+    className="inline-flex items-center justify-center rounded-lg px-5 py-2.5
+               font-medium shadow-sm transition
+               bg-emerald-600 text-white hover:bg-emerald-700
+               focus:outline-none focus-visible:ring-2
+               focus-visible:ring-emerald-400 dark:focus-visible:ring-emerald-500"
+  >
+    Edit&nbsp;User
+  </button>
 
-              {/* View History button  */}
+  {/*-------------------------- View History button ------------------------------------ */}
               <button
-                onClick={() => nav(`/userHistory/${id}`)}
-                className="mt-8 inline-flex items-center gap-1 px-5 py-2.5 rounded-lg
-                          bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-              >
-                View&nbsp;History
-              </button>
+    onClick={() => nav(`/userHistory/${id}`)}
+    className="inline-flex items-center justify-center rounded-lg px-5 py-2.5
+               font-medium shadow-sm transition
+               bg-slate-700 text-white hover:bg-slate-800
+               focus:outline-none focus-visible:ring-2
+               focus-visible:ring-slate-400 dark:focus-visible:ring-slate-500"
+  >
+    View&nbsp;History
+  </button></div>
             </>
           )}
       </div>
