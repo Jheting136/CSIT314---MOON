@@ -5,18 +5,21 @@ import { handleLogout } from '../controllers/logoutController';
 import { type HistoryItem } from '../models/userHistoryModel';
 
 const CleanerPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'work' | 'portfolio' | 'availability' | 'bookings'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'Work Completed' | 'portfolio' | 'availability' | 'bookings'>('profile');
   const [jobs, setJobs] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (activeTab === 'work') {
-      fetchJobs();
+    if (activeTab === 'Work Completed') {
+      fetchCompletedJobs();
+    } else if (activeTab === 'bookings') {
+      fetchBookings();
     }
   }, [activeTab]);
 
-  const fetchJobs = async () => {
+  // Fetch only completed jobs for Work tab
+  const fetchCompletedJobs = async () => {
     setLoading(true);
     setError(null);
 
@@ -34,10 +37,45 @@ const CleanerPage: React.FC = () => {
 
     try {
       const jobHistory = await UserHistoryController.list(user.id);
-      setJobs(jobHistory);
+      const completedJobs = jobHistory.filter(
+        (job) => job.status.toLowerCase() === 'completed'
+      );
+      setJobs(completedJobs);
     } catch (err) {
       console.error('Controller error:', err);
-      setError('Failed to fetch work history.');
+      setError('Failed to fetch completed jobs.');
+    }
+
+    setLoading(false);
+  };
+
+  // Fetch pending, approved, and rejected jobs for Bookings tab
+  const fetchBookings = async () => {
+    setLoading(true);
+    setError(null);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setError('Failed to get authenticated user');
+      console.error('Auth error:', userError?.message);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const jobHistory = await UserHistoryController.list(user.id);
+      const filtered = jobHistory.filter(
+        (job) =>
+          ['pending', 'approved', 'rejected'].includes(job.status.toLowerCase())
+      );
+      setJobs(filtered);
+    } catch (err) {
+      console.error('Controller error:', err);
+      setError('Failed to fetch bookings.');
     }
 
     setLoading(false);
@@ -48,16 +86,16 @@ const CleanerPage: React.FC = () => {
       case 'profile':
         return <div>Cleaner profile info goes here.</div>;
 
-      case 'work':
+      case 'Work Completed':
         return (
           <div>
-            <h2 className="text-xl font-semibold mb-4">Work History</h2>
+            <h2 className="text-xl font-semibold mb-4">Completed Work</h2>
             {loading ? (
-              <p>Loading work history...</p>
+              <p>Loading completed jobs...</p>
             ) : error ? (
               <p className="text-red-500">{error}</p>
             ) : jobs.length === 0 ? (
-              <p>No work history found.</p>
+              <p>No completed jobs found.</p>
             ) : (
               <ul className="space-y-4">
                 {jobs.map((job) => (
@@ -80,7 +118,42 @@ const CleanerPage: React.FC = () => {
         return <div>Availability settings go here.</div>;
 
       case 'bookings':
-        return <div>Upcoming and past bookings go here.</div>;
+        return (
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Bookings</h2>
+            {loading ? (
+              <p>Loading bookings...</p>
+            ) : error ? (
+              <p className="text-red-500">{error}</p>
+            ) : jobs.length === 0 ? (
+              <p>No bookings found.</p>
+            ) : (
+              <ul className="space-y-4">
+                {jobs.map((job) => (
+                  <li key={job.id} className="p-4 border rounded shadow">
+                    <p><strong>Service:</strong> {job.service}</p>
+                    <p><strong>Location:</strong> {job.location}</p>
+                    <p><strong>Date:</strong> {new Date(job.date).toLocaleString()}</p>
+                    <p>
+                      <strong>Status:</strong>{' '}
+                      <span
+                        className={
+                          job.status.toLowerCase() === 'approved'
+                            ? 'text-green-600'
+                            : job.status.toLowerCase() === 'rejected'
+                            ? 'text-red-600'
+                            : 'text-yellow-600'
+                        }
+                      >
+                        {job.status}
+                      </span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
 
       default:
         return null;
@@ -100,36 +173,17 @@ const CleanerPage: React.FC = () => {
       </div>
 
       <div className="flex space-x-4 mb-6">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`px-4 py-2 rounded ${activeTab === 'profile' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-        >
-          Profile
-        </button>
-        <button
-          onClick={() => setActiveTab('work')}
-          className={`px-4 py-2 rounded ${activeTab === 'work' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-        >
-          Work History
-        </button>
-        <button
-          onClick={() => setActiveTab('portfolio')}
-          className={`px-4 py-2 rounded ${activeTab === 'portfolio' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-        >
-          Portfolio
-        </button>
-        <button
-          onClick={() => setActiveTab('availability')}
-          className={`px-4 py-2 rounded ${activeTab === 'availability' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-        >
-          Availability
-        </button>
-        <button
-          onClick={() => setActiveTab('bookings')}
-          className={`px-4 py-2 rounded ${activeTab === 'bookings' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-        >
-          Bookings
-        </button>
+        {['profile', 'Work Completed', 'portfolio', 'availability', 'bookings'].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab as typeof activeTab)}
+            className={`px-4 py-2 rounded ${
+              activeTab === tab ? 'bg-blue-500 text-white' : 'bg-gray-200'
+            }`}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
       </div>
 
       <div>{renderTabContent()}</div>
