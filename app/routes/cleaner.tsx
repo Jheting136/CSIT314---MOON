@@ -10,15 +10,22 @@ const CleanerPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+
+  const BUCKET_NAME = 'portfolio'; // 🔁 Replace this with your actual bucket name
+
   useEffect(() => {
     if (activeTab === 'Work Completed') {
       fetchCompletedJobs();
     } else if (activeTab === 'bookings') {
       fetchBookings();
+    } else if (activeTab === 'portfolio') {
+      fetchPortfolioImages();
     }
   }, [activeTab]);
 
-  // Fetch only completed jobs for Work tab
   const fetchCompletedJobs = async () => {
     setLoading(true);
     setError(null);
@@ -30,26 +37,21 @@ const CleanerPage: React.FC = () => {
 
     if (userError || !user) {
       setError('Failed to get authenticated user');
-      console.error('Auth error:', userError?.message);
       setLoading(false);
       return;
     }
 
     try {
       const jobHistory = await UserHistoryController.list(user.id);
-      const completedJobs = jobHistory.filter(
-        (job) => job.status.toLowerCase() === 'completed'
-      );
+      const completedJobs = jobHistory.filter((job) => job.status.toLowerCase() === 'completed');
       setJobs(completedJobs);
     } catch (err) {
-      console.error('Controller error:', err);
       setError('Failed to fetch completed jobs.');
     }
 
     setLoading(false);
   };
 
-  // Fetch pending, approved, and rejected jobs for Bookings tab
   const fetchBookings = async () => {
     setLoading(true);
     setError(null);
@@ -61,23 +63,152 @@ const CleanerPage: React.FC = () => {
 
     if (userError || !user) {
       setError('Failed to get authenticated user');
-      console.error('Auth error:', userError?.message);
       setLoading(false);
       return;
     }
 
     try {
       const jobHistory = await UserHistoryController.list(user.id);
-      const filtered = jobHistory.filter(
-        (job) =>
-          ['pending', 'approved', 'rejected'].includes(job.status.toLowerCase())
+      const filtered = jobHistory.filter((job) =>
+        ['pending', 'approved', 'rejected'].includes(job.status.toLowerCase())
       );
       setJobs(filtered);
     } catch (err) {
-      console.error('Controller error:', err);
       setError('Failed to fetch bookings.');
     }
 
+    setLoading(false);
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setSelectedFile(file);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      alert('Please select a file to upload.');
+      return;
+    }
+
+    // Check file type (only images in this case)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(selectedFile.type)) {
+      alert('Invalid file type. Please select an image file.');
+      return;
+    }
+
+    // Check file size (limit to 5MB in this example)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (selectedFile.size > maxSize) {
+      alert('File size is too large. Please select a file smaller than 5MB.');
+      return;
+    }
+
+    setUploading(true);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      alert('User not authenticated');
+      setUploading(false);
+      return;
+    }
+
+    const fileExt = selectedFile.name.split('.').pop();
+    const filePath = `portfolio/${user.id}/${Date.now()}.${fileExt}`;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, selectedFile);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError.message);  // Log error message
+        alert('Upload failed. Please check the console for details.');
+        setUploading(false);
+        return;
+      }
+
+      const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
+      setPortfolioImages((prev) => [...prev, data.publicUrl]);
+      alert('Upload successful!');
+    } catch (error) {
+      console.error('Unexpected error:', error);  // Log unexpected errors
+      alert('Upload failed due to an unexpected error.');
+    }
+
+    setUploading(false);
+    setSelectedFile(null);
+  };
+
+  const handleDeleteImage = async (imageUrl: string) => {
+    const imageName = imageUrl.split('/').pop();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      alert('User not authenticated');
+      return;
+    }
+
+    try {
+      const filePath = `portfolio/${user.id}/${imageName}`;
+      const { error: deleteError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([filePath]);
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError.message);
+        alert('Failed to delete image.');
+        return;
+      }
+
+      setPortfolioImages((prevImages) => prevImages.filter((url) => url !== imageUrl));
+      alert('Image deleted successfully!');
+    } catch (error) {
+      console.error('Unexpected error during delete:', error);
+      alert('An error occurred while deleting the image.');
+    }
+  };
+
+  const fetchPortfolioImages = async () => {
+    setLoading(true);
+    setError(null);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setError('Failed to get authenticated user');
+      setLoading(false);
+      return;
+    }
+
+    const { data, error: listError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .list(`portfolio/${user.id}`, { limit: 100, offset: 0 });
+
+    if (listError) {
+      setError('Failed to fetch portfolio images.');
+      setLoading(false);
+      return;
+    }
+
+    const imageUrls = data
+      ?.map((file) =>
+        supabase.storage.from(BUCKET_NAME).getPublicUrl(`portfolio/${user.id}/${file.name}`).data.publicUrl
+      )
+      .filter(Boolean) as string[];
+
+    setPortfolioImages(imageUrls);
     setLoading(false);
   };
 
@@ -112,7 +243,50 @@ const CleanerPage: React.FC = () => {
         );
 
       case 'portfolio':
-        return <div>Portfolio content goes here.</div>;
+        return (
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Your Portfolio</h2>
+            <div className="flex items-center mb-4">
+              <label className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded cursor-pointer mr-2">
+                Choose File
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleFileChange} 
+                  className="hidden" 
+                />
+              </label>
+              <button
+                onClick={handleUpload}
+                disabled={uploading || !selectedFile}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              >
+                {uploading ? 'Uploading...' : 'Upload'}
+              </button>
+              {selectedFile && (
+                <span className="ml-2">{selectedFile.name}</span>
+              )}
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {portfolioImages.map((url, idx) => (
+                <div key={idx} className="relative group">
+                  <img 
+                    src={url} 
+                    alt={`Portfolio ${idx}`} 
+                    className="w-full h-48 object-cover rounded shadow" 
+                  />
+                  <button
+                    onClick={() => handleDeleteImage(url)}
+                    className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ❌
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
 
       case 'availability':
         return <div>Availability settings go here.</div>;
