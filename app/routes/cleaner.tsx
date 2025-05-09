@@ -77,6 +77,20 @@ const CleanerPage: React.FC = () => {
     setLoading(false);
   };
 
+  // Function to get the color based on job status
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'text-amber-500'; // Amber for pending
+      case 'approved':
+        return 'text-green-500'; // Green for approved
+      case 'rejected':
+        return 'text-red-500'; // Red for rejected
+      default:
+        return 'text-gray-500'; // Default for unknown status
+    }
+  };
+
   // Handle file selection for image upload
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
@@ -264,7 +278,7 @@ const CleanerPage: React.FC = () => {
                     <p><strong>Service:</strong> {job.service}</p>
                     <p><strong>Location:</strong> {job.location}</p>
                     <p><strong>Date:</strong> {new Date(job.date).toLocaleString()}</p>
-                    <p><strong>Status:</strong> {job.status}</p>
+                    <p className={getStatusColor(job.status)}><strong>Status:</strong> {job.status}</p>
                   </li>
                 ))}
               </ul>
