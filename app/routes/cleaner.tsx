@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { UserHistoryController } from '../controllers/userHistoryController';
 import { handleLogout } from '../controllers/logoutController';
+import { PortfolioController } from '../controllers/portfolioController';  // Import PortfolioController
+import { PortfolioImage } from '../models/portfolioImage';  // Import PortfolioImage model
 import { type HistoryItem } from '../models/userHistoryModel';
 
 const CleanerPage: React.FC = () => {
@@ -12,10 +14,9 @@ const CleanerPage: React.FC = () => {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+  const [portfolioImages, setPortfolioImages] = useState<PortfolioImage[]>([]);
 
-  const BUCKET_NAME = 'portfolio'; // 🔁 Replace this with your actual bucket name
-
+  // Fetch the data when the active tab changes
   useEffect(() => {
     if (activeTab === 'Work Completed') {
       fetchCompletedJobs();
@@ -26,14 +27,12 @@ const CleanerPage: React.FC = () => {
     }
   }, [activeTab]);
 
+  // Fetch completed jobs for 'Work Completed' tab
   const fetchCompletedJobs = async () => {
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       setError('Failed to get authenticated user');
@@ -52,14 +51,12 @@ const CleanerPage: React.FC = () => {
     setLoading(false);
   };
 
+  // Fetch bookings for 'bookings' tab
   const fetchBookings = async () => {
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       setError('Failed to get authenticated user');
@@ -80,25 +77,26 @@ const CleanerPage: React.FC = () => {
     setLoading(false);
   };
 
+  // Handle file selection for image upload
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
     setSelectedFile(file);
   };
 
+  // Handle file upload to portfolio
   const handleUpload = async () => {
     if (!selectedFile) {
       alert('Please select a file to upload.');
       return;
     }
 
-    // Check file type (only images in this case)
+    // Validate file type (only images allowed)
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
     if (!allowedTypes.includes(selectedFile.type)) {
       alert('Invalid file type. Please select an image file.');
       return;
     }
 
-    // Check file size (limit to 5MB in this example)
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (selectedFile.size > maxSize) {
       alert('File size is too large. Please select a file smaller than 5MB.');
@@ -107,10 +105,7 @@ const CleanerPage: React.FC = () => {
 
     setUploading(true);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       alert('User not authenticated');
@@ -118,26 +113,12 @@ const CleanerPage: React.FC = () => {
       return;
     }
 
-    const fileExt = selectedFile.name.split('.').pop();
-    const filePath = `portfolio/${user.id}/${Date.now()}.${fileExt}`;
-
     try {
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(filePath, selectedFile);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError.message);  // Log error message
-        alert('Upload failed. Please check the console for details.');
-        setUploading(false);
-        return;
-      }
-
-      const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
-      setPortfolioImages((prev) => [...prev, data.publicUrl]);
+      const uploadedImage = await PortfolioController.uploadImage(user.id, selectedFile);  // Use PortfolioController
+      setPortfolioImages((prevImages) => [...prevImages, uploadedImage]);
       alert('Upload successful!');
-    } catch (error) {
-      console.error('Unexpected error:', error);  // Log unexpected errors
+    } catch (err) {
+      console.error('Upload error:', err);
       alert('Upload failed due to an unexpected error.');
     }
 
@@ -145,12 +126,9 @@ const CleanerPage: React.FC = () => {
     setSelectedFile(null);
   };
 
-  const handleDeleteImage = async (imageUrl: string) => {
-    const imageName = imageUrl.split('/').pop();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+  // Handle image deletion from portfolio
+  const handleDeleteImage = async (image: PortfolioImage) => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       alert('User not authenticated');
@@ -158,33 +136,21 @@ const CleanerPage: React.FC = () => {
     }
 
     try {
-      const filePath = `portfolio/${user.id}/${imageName}`;
-      const { error: deleteError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .remove([filePath]);
-
-      if (deleteError) {
-        console.error('Delete error:', deleteError.message);
-        alert('Failed to delete image.');
-        return;
-      }
-
-      setPortfolioImages((prevImages) => prevImages.filter((url) => url !== imageUrl));
+      await PortfolioController.deleteImage(user.id, image.id);  // Use PortfolioController
+      setPortfolioImages((prevImages) => prevImages.filter((img) => img.id !== image.id));
       alert('Image deleted successfully!');
-    } catch (error) {
-      console.error('Unexpected error during delete:', error);
+    } catch (err) {
+      console.error('Delete error:', err);
       alert('An error occurred while deleting the image.');
     }
   };
 
+  // Fetch portfolio images
   const fetchPortfolioImages = async () => {
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       setError('Failed to get authenticated user');
@@ -192,23 +158,13 @@ const CleanerPage: React.FC = () => {
       return;
     }
 
-    const { data, error: listError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .list(`portfolio/${user.id}`, { limit: 100, offset: 0 });
-
-    if (listError) {
+    try {
+      const images = await PortfolioController.fetchImages(user.id);  // Use PortfolioController
+      setPortfolioImages(images);
+    } catch (err) {
       setError('Failed to fetch portfolio images.');
-      setLoading(false);
-      return;
     }
 
-    const imageUrls = data
-      ?.map((file) =>
-        supabase.storage.from(BUCKET_NAME).getPublicUrl(`portfolio/${user.id}/${file.name}`).data.publicUrl
-      )
-      .filter(Boolean) as string[];
-
-    setPortfolioImages(imageUrls);
     setLoading(false);
   };
 
@@ -249,11 +205,11 @@ const CleanerPage: React.FC = () => {
             <div className="flex items-center mb-4">
               <label className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded cursor-pointer mr-2">
                 Choose File
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleFileChange} 
-                  className="hidden" 
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
                 />
               </label>
               <button
@@ -269,15 +225,15 @@ const CleanerPage: React.FC = () => {
             </div>
 
             <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {portfolioImages.map((url, idx) => (
-                <div key={idx} className="relative group">
-                  <img 
-                    src={url} 
-                    alt={`Portfolio ${idx}`} 
-                    className="w-full h-48 object-cover rounded shadow" 
+              {portfolioImages.map((image, idx) => (
+                <div key={image.id} className="relative group">
+                  <img
+                    src={image.publicUrl}
+                    alt={`Portfolio ${idx}`}
+                    className="w-full h-48 object-cover rounded shadow"
                   />
                   <button
-                    onClick={() => handleDeleteImage(url)}
+                    onClick={() => handleDeleteImage(image)}
                     className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     ❌
@@ -308,20 +264,7 @@ const CleanerPage: React.FC = () => {
                     <p><strong>Service:</strong> {job.service}</p>
                     <p><strong>Location:</strong> {job.location}</p>
                     <p><strong>Date:</strong> {new Date(job.date).toLocaleString()}</p>
-                    <p>
-                      <strong>Status:</strong>{' '}
-                      <span
-                        className={
-                          job.status.toLowerCase() === 'approved'
-                            ? 'text-green-600'
-                            : job.status.toLowerCase() === 'rejected'
-                            ? 'text-red-600'
-                            : 'text-yellow-600'
-                        }
-                      >
-                        {job.status}
-                      </span>
-                    </p>
+                    <p><strong>Status:</strong> {job.status}</p>
                   </li>
                 ))}
               </ul>
@@ -335,32 +278,21 @@ const CleanerPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Cleaner Dashboard</h1>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-        >
-          Logout
-        </button>
-      </div>
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <nav className="bg-blue-600 p-4 text-white flex items-center justify-between">
+        <div className="space-x-4">
+          <button onClick={() => setActiveTab('profile')} className="hover:bg-blue-700 px-3 py-2 rounded">Profile</button>
+          <button onClick={() => setActiveTab('Work Completed')} className="hover:bg-blue-700 px-3 py-2 rounded">Work Completed</button>
+          <button onClick={() => setActiveTab('portfolio')} className="hover:bg-blue-700 px-3 py-2 rounded">Portfolio</button>
+          <button onClick={() => setActiveTab('availability')} className="hover:bg-blue-700 px-3 py-2 rounded">Availability</button>
+          <button onClick={() => setActiveTab('bookings')} className="hover:bg-blue-700 px-3 py-2 rounded">Bookings</button>
+        </div>
+        <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-white">Logout</button>
+      </nav>
 
-      <div className="flex space-x-4 mb-6">
-        {['profile', 'Work Completed', 'portfolio', 'availability', 'bookings'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as typeof activeTab)}
-            className={`px-4 py-2 rounded ${
-              activeTab === tab ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            }`}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
+      <div className="p-6">
+        {renderTabContent()}
       </div>
-
-      <div>{renderTabContent()}</div>
     </div>
   );
 };
