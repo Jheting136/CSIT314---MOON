@@ -1,13 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { UserHistoryController } from '../controllers/userHistoryController';
-import { handleLogout } from '../controllers/logoutController';
-import { PortfolioController } from '../controllers/portfolioController';  // Import PortfolioController
-import { PortfolioImage } from '../models/portfolioImage';  // Import PortfolioImage model
-import { type HistoryItem } from '../models/userHistoryModel';
+import React, { useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { UserHistoryController } from "../controllers/userHistoryController";
+import { handleLogout } from "../controllers/logoutController";
+import { PortfolioController } from "../controllers/portfolioController"; // Import PortfolioController
+import { PortfolioImage } from "../models/portfolioImage"; // Import PortfolioImage model
+import { type HistoryItem } from "../models/userHistoryModel";
 
 const CleanerPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'Work Completed' | 'portfolio' | 'availability' | 'bookings'>('profile');
+  const [userId, setUserId] = useState<string>("");
+
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "Work Completed" | "portfolio" | "availability" | "bookings"
+  >("profile");
   const [jobs, setJobs] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,11 +22,13 @@ const CleanerPage: React.FC = () => {
 
   // Fetch the data when the active tab changes
   useEffect(() => {
-    if (activeTab === 'Work Completed') {
+    setUserId(localStorage.getItem("userId") || "");
+
+    if (activeTab === "Work Completed") {
       fetchCompletedJobs();
-    } else if (activeTab === 'bookings') {
+    } else if (activeTab === "bookings") {
       fetchBookings();
-    } else if (activeTab === 'portfolio') {
+    } else if (activeTab === "portfolio") {
       fetchPortfolioImages();
     }
   }, [activeTab]);
@@ -32,20 +38,20 @@ const CleanerPage: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError('Failed to get authenticated user');
+    if (!userId) {
+      setError("Failed to get authenticated user");
       setLoading(false);
       return;
     }
 
     try {
-      const jobHistory = await UserHistoryController.list(user.id);
-      const completedJobs = jobHistory.filter((job) => job.status.toLowerCase() === 'completed');
+      const jobHistory = await UserHistoryController.list(userId);
+      const completedJobs = jobHistory.filter(
+        (job) => job.status.toLowerCase() === "completed"
+      );
       setJobs(completedJobs);
     } catch (err) {
-      setError('Failed to fetch completed jobs.');
+      setError("Failed to fetch completed jobs.");
     }
 
     setLoading(false);
@@ -56,22 +62,20 @@ const CleanerPage: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError('Failed to get authenticated user');
+    if (!userId) {
+      setError("Failed to get authenticated user");
       setLoading(false);
       return;
     }
 
     try {
-      const jobHistory = await UserHistoryController.list(user.id);
+      const jobHistory = await UserHistoryController.list(userId);
       const filtered = jobHistory.filter((job) =>
-        ['pending', 'approved', 'rejected'].includes(job.status.toLowerCase())
+        ["pending", "approved", "rejected"].includes(job.status.toLowerCase())
       );
       setJobs(filtered);
     } catch (err) {
-      setError('Failed to fetch bookings.');
+      setError("Failed to fetch bookings.");
     }
 
     setLoading(false);
@@ -80,14 +84,14 @@ const CleanerPage: React.FC = () => {
   // Function to get the color based on job status
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending':
-        return 'text-amber-500'; // Amber for pending
-      case 'approved':
-        return 'text-green-500'; // Green for approved
-      case 'rejected':
-        return 'text-red-500'; // Red for rejected
+      case "pending":
+        return "text-amber-500"; // Amber for pending
+      case "approved":
+        return "text-green-500"; // Green for approved
+      case "rejected":
+        return "text-red-500"; // Red for rejected
       default:
-        return 'text-gray-500'; // Default for unknown status
+        return "text-gray-500"; // Default for unknown status
     }
   };
 
@@ -100,40 +104,41 @@ const CleanerPage: React.FC = () => {
   // Handle file upload to portfolio
   const handleUpload = async () => {
     if (!selectedFile) {
-      alert('Please select a file to upload.');
+      alert("Please select a file to upload.");
       return;
     }
 
     // Validate file type (only images allowed)
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
     if (!allowedTypes.includes(selectedFile.type)) {
-      alert('Invalid file type. Please select an image file.');
+      alert("Invalid file type. Please select an image file.");
       return;
     }
 
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (selectedFile.size > maxSize) {
-      alert('File size is too large. Please select a file smaller than 5MB.');
+      alert("File size is too large. Please select a file smaller than 5MB.");
       return;
     }
 
     setUploading(true);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      alert('User not authenticated');
+    if (!userId) {
+      alert("User not authenticated");
       setUploading(false);
       return;
     }
 
     try {
-      const uploadedImage = await PortfolioController.uploadImage(user.id, selectedFile);  // Use PortfolioController
+      const uploadedImage = await PortfolioController.uploadImage(
+        userId,
+        selectedFile
+      ); // Use PortfolioController
       setPortfolioImages((prevImages) => [...prevImages, uploadedImage]);
-      alert('Upload successful!');
+      alert("Upload successful!");
     } catch (err) {
-      console.error('Upload error:', err);
-      alert('Upload failed due to an unexpected error.');
+      console.error("Upload error:", err);
+      alert("Upload failed due to an unexpected error.");
     }
 
     setUploading(false);
@@ -142,20 +147,20 @@ const CleanerPage: React.FC = () => {
 
   // Handle image deletion from portfolio
   const handleDeleteImage = async (image: PortfolioImage) => {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      alert('User not authenticated');
+    if (!userId) {
+      alert("User not authenticated");
       return;
     }
 
     try {
-      await PortfolioController.deleteImage(user.id, image.id);  // Use PortfolioController
-      setPortfolioImages((prevImages) => prevImages.filter((img) => img.id !== image.id));
-      alert('Image deleted successfully!');
+      await PortfolioController.deleteImage(userId, image.id); // Use PortfolioController
+      setPortfolioImages((prevImages) =>
+        prevImages.filter((img) => img.id !== image.id)
+      );
+      alert("Image deleted successfully!");
     } catch (err) {
-      console.error('Delete error:', err);
-      alert('An error occurred while deleting the image.');
+      console.error("Delete error:", err);
+      alert("An error occurred while deleting the image.");
     }
   };
 
@@ -164,19 +169,17 @@ const CleanerPage: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError('Failed to get authenticated user');
+    if (!userId) {
+      setError("Failed to get authenticated user");
       setLoading(false);
       return;
     }
 
     try {
-      const images = await PortfolioController.fetchImages(user.id);  // Use PortfolioController
+      const images = await PortfolioController.fetchImages(userId); // Use PortfolioController
       setPortfolioImages(images);
     } catch (err) {
-      setError('Failed to fetch portfolio images.');
+      setError("Failed to fetch portfolio images.");
     }
 
     setLoading(false);
@@ -184,10 +187,10 @@ const CleanerPage: React.FC = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'profile':
+      case "profile":
         return <div>Cleaner profile info goes here.</div>;
 
-      case 'Work Completed':
+      case "Work Completed":
         return (
           <div>
             <h2 className="text-xl font-semibold mb-4">Completed Work</h2>
@@ -201,10 +204,19 @@ const CleanerPage: React.FC = () => {
               <ul className="space-y-4">
                 {jobs.map((job) => (
                   <li key={job.id} className="p-4 border rounded shadow">
-                    <p><strong>Service:</strong> {job.service}</p>
-                    <p><strong>Location:</strong> {job.location}</p>
-                    <p><strong>Date:</strong> {new Date(job.date).toLocaleString()}</p>
-                    <p><strong>Status:</strong> {job.status}</p>
+                    <p>
+                      <strong>Service:</strong> {job.service}
+                    </p>
+                    <p>
+                      <strong>Location:</strong> {job.location}
+                    </p>
+                    <p>
+                      <strong>Date:</strong>{" "}
+                      {new Date(job.date).toLocaleString()}
+                    </p>
+                    <p>
+                      <strong>Status:</strong> {job.status}
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -212,7 +224,7 @@ const CleanerPage: React.FC = () => {
           </div>
         );
 
-      case 'portfolio':
+      case "portfolio":
         return (
           <div>
             <h2 className="text-xl font-semibold mb-4">Your Portfolio</h2>
@@ -231,7 +243,7 @@ const CleanerPage: React.FC = () => {
                 disabled={uploading || !selectedFile}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
               >
-                {uploading ? 'Uploading...' : 'Upload'}
+                {uploading ? "Uploading..." : "Upload"}
               </button>
               {selectedFile && (
                 <span className="ml-2">{selectedFile.name}</span>
@@ -258,10 +270,10 @@ const CleanerPage: React.FC = () => {
           </div>
         );
 
-      case 'availability':
+      case "availability":
         return <div>Availability settings go here.</div>;
 
-      case 'bookings':
+      case "bookings":
         return (
           <div>
             <h2 className="text-xl font-semibold mb-4">Bookings</h2>
@@ -275,10 +287,19 @@ const CleanerPage: React.FC = () => {
               <ul className="space-y-4">
                 {jobs.map((job) => (
                   <li key={job.id} className="p-4 border rounded shadow">
-                    <p><strong>Service:</strong> {job.service}</p>
-                    <p><strong>Location:</strong> {job.location}</p>
-                    <p><strong>Date:</strong> {new Date(job.date).toLocaleString()}</p>
-                    <p className={getStatusColor(job.status)}><strong>Status:</strong> {job.status}</p>
+                    <p>
+                      <strong>Service:</strong> {job.service}
+                    </p>
+                    <p>
+                      <strong>Location:</strong> {job.location}
+                    </p>
+                    <p>
+                      <strong>Date:</strong>{" "}
+                      {new Date(job.date).toLocaleString()}
+                    </p>
+                    <p className={getStatusColor(job.status)}>
+                      <strong>Status:</strong> {job.status}
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -295,18 +316,46 @@ const CleanerPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 font-sans">
       <nav className="bg-blue-600 p-4 text-white flex items-center justify-between">
         <div className="space-x-4">
-          <button onClick={() => setActiveTab('profile')} className="hover:bg-blue-700 px-3 py-2 rounded">Profile</button>
-          <button onClick={() => setActiveTab('Work Completed')} className="hover:bg-blue-700 px-3 py-2 rounded">Work Completed</button>
-          <button onClick={() => setActiveTab('portfolio')} className="hover:bg-blue-700 px-3 py-2 rounded">Portfolio</button>
-          <button onClick={() => setActiveTab('availability')} className="hover:bg-blue-700 px-3 py-2 rounded">Availability</button>
-          <button onClick={() => setActiveTab('bookings')} className="hover:bg-blue-700 px-3 py-2 rounded">Bookings</button>
+          <button
+            onClick={() => setActiveTab("profile")}
+            className="hover:bg-blue-700 px-3 py-2 rounded"
+          >
+            Profile
+          </button>
+          <button
+            onClick={() => setActiveTab("Work Completed")}
+            className="hover:bg-blue-700 px-3 py-2 rounded"
+          >
+            Work Completed
+          </button>
+          <button
+            onClick={() => setActiveTab("portfolio")}
+            className="hover:bg-blue-700 px-3 py-2 rounded"
+          >
+            Portfolio
+          </button>
+          <button
+            onClick={() => setActiveTab("availability")}
+            className="hover:bg-blue-700 px-3 py-2 rounded"
+          >
+            Availability
+          </button>
+          <button
+            onClick={() => setActiveTab("bookings")}
+            className="hover:bg-blue-700 px-3 py-2 rounded"
+          >
+            Bookings
+          </button>
         </div>
-        <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-white">Logout</button>
+        <button
+          onClick={handleLogout}
+          className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-white"
+        >
+          Logout
+        </button>
       </nav>
 
-      <div className="p-6">
-        {renderTabContent()}
-      </div>
+      <div className="p-6">{renderTabContent()}</div>
     </div>
   );
 };

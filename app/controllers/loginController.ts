@@ -12,6 +12,9 @@ export async function handleLogin(
   );
   if (profileError || !profile) return "Unable to fetch user role.";
 
+  // Save user ID to local storage
+  localStorage.setItem("userId", data.id);
+
   const role = profile.account_type;
 
   if (role === "admin") window.location.href = "/admin";
