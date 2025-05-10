@@ -1,7 +1,6 @@
 import { supabase } from "../lib/supabaseClient";
 
 export async function insertUserEntity(user: {
-  id: string;
   email: string;
   name: string;
   account_type: string;
