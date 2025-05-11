@@ -52,4 +52,24 @@ static async updateRow<T extends object>(
   if (error) throw error;
   return data;            // updated row
 }
+
+static async setUserStatus<T extends string>(
+    table: string,
+    id: string,
+    statusColumn: string,
+    statusValue: T
+  ): Promise<boolean> {
+    const { error } = await supabase
+      .from(table)
+      .update({ [statusColumn]: statusValue })
+      .eq('id', id);
+
+    if (error) {
+      console.error(`[Supabase] Failed to update ${statusColumn} on ${table}:`, error.message);
+      return false;
+    }
+
+    return true;
+  }
+
 }

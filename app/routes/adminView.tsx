@@ -2,39 +2,35 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { commonController } from '../controllers/commonController';
 import { adminViewController } from '../controllers/adminViewController';
-import { TextField, Button, List, ListItem, Typography, Container, Box, Paper, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import {
+  TextField, Button, List, ListItem, Typography, Container, Box,
+  Paper, Dialog, DialogTitle, DialogContent, DialogActions
+} from '@mui/material';
 
 import DeleteIcon from '@mui/icons-material/Delete';
 import IconButton from '@mui/material/IconButton';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
 
 export default function Homeowners() {
   const [homeowners, setHomeowners] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
   const navigate = useNavigate();
 
-  //delete dialog
-  const [openDialog, setOpenDialog] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const handleOpenDialog = (id) => {
-    setSelectedUserId(id);
-    setOpenDialog(true);
-  };
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userIdToDelete, setUserIdToDelete] = useState(null);
 
-  const handleCloseDialog = () => {
-    setSelectedUserId(null);
-    setOpenDialog(false);
-  };
+  // Approval dialog state
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [userIdToApprove, setUserIdToApprove] = useState(null);
 
-  //pagination
-  const [page, setPage] = useState(1); // current page
-  const [pageSize, setPageSize] = useState(10); // items per page
-  const [totalPages, setTotalPages] = useState(0); // total number of pages
-  const [searchTerm, setSearchTerm] = useState(''); // search term
-
-  // Dynamically fetch data with the search term
+  // Load users with optional search
   const loadData = async () => {
     const filters = [];
 
-    // If there's a search term, add it to the filters for dynamic searching
     if (searchTerm) {
       filters.push({ column: 'name', operator: 'ilike', value: `%${searchTerm}%` });
       filters.push({ column: 'email', operator: 'ilike', value: `%${searchTerm}%` });
@@ -42,132 +38,176 @@ export default function Homeowners() {
 
     const result = await commonController.fetchTableData(
       'users',
-      'id, name, email, account_type, created_at',
+      'id, name, email, account_type, created_at, status',
       filters,
       page,
       pageSize
     );
 
     setHomeowners(result.data || []);
-    setTotalPages(Math.ceil(result.count / pageSize)); // Round up for total pages
+    setTotalPages(Math.ceil(result.count / pageSize));
   };
 
-  // Trigger loadData when the page or searchTerm changes
   useEffect(() => {
     loadData();
   }, [page, searchTerm]);
 
-  // Handle search term change
+  // Search box handler
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
-    setPage(1); // Reset to first page when search changes
+    setPage(1);
+  };
+
+  // --- Delete Dialog Functions ---
+  const openDeleteDialog = (id) => {
+    setUserIdToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setUserIdToDelete(null);
+    setDeleteDialogOpen(false);
+  };
+
+  const handleDeleteUser = async () => {
+    await adminViewController.deleteUser(userIdToDelete);
+    closeDeleteDialog();
+    loadData();
+  };
+
+  // --- Approval Dialog Functions ---
+  const openApprovalDialog = (id) => {
+    setUserIdToApprove(id);
+    setApprovalDialogOpen(true);
+  };
+
+  const closeApprovalDialog = () => {
+    setUserIdToApprove(null);
+    setApprovalDialogOpen(false);
+  };
+
+  const handleApproveUser = async () => {
+    await adminViewController.approveUser(userIdToApprove);
+    closeApprovalDialog();
+    loadData();
+  };
+
+  const handleRejectUser = async () => {
+    await adminViewController.rejectUser(userIdToApprove);
+    closeApprovalDialog();
+    loadData();
   };
 
   return (
+    <Box className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white">
+      <Box className="container mx-auto px-4 py-12">
+        <Box
+          className="bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white"
+          sx={{
+            position: 'sticky',
+            top: 0, // Important for sticky to work
+            zIndex: 1000,
+            paddingTop: 2,
+            paddingBottom: 2,
+            mb: 2,
+          }}
+        >
+          <Typography variant="h5" gutterBottom>
+            Users (Page {page} of {totalPages})
+          </Typography>
 
-    <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
-      <Paper elevation={3} sx={{ padding: 4 }}>
-        <Typography variant="h5" gutterBottom>
-          Users (Page {page} of {totalPages})
-        </Typography>
-  
-        {/* Search Box */}
-        <TextField
-          type="text"
-          placeholder="Search by name or email"
-          value={searchTerm}
-          onChange={handleSearchChange}
-          variant="outlined"
-          fullWidth
-          sx={{ marginBottom: '1.5rem' }}
-        />
-  
-        <List sx={{ backgroundColor: '#f9f9f9', borderRadius: '6px' }}>
+          <TextField
+            type="text"
+            placeholder="Search by name or email"
+            sx={{
+                  backgroundColor: 'white',
+                  borderRadius: 1,
+                  input: { color: 'black' },
+                }}
+            value={searchTerm}
+            onChange={handleSearchChange}
+            variant="outlined"
+            fullWidth
+          />
+        </Box>
+
+        <List sx={{ borderRadius: '6px', border: '1px solid #444' }}>
           {homeowners.length > 0 ? (
-            homeowners.map((item, index) => (
+            homeowners.map((item) => (
               <ListItem
-                key={index}
+                key={item.id}
                 sx={{
                   padding: '1rem',
-                  borderBottom: '1px solid #ccc',
+                  borderBottom: '1px solid #444',
                   display: 'flex',
-                  flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   cursor: 'pointer',
-                  '&:hover': { backgroundColor: '#eef' }
+                  '&:hover': { backgroundColor: '#1e1e1e' }
                 }}
                 onClick={() => navigate(`/viewUserProfile/${item.id}`)}
               >
-                {/* Left side: user info */}
                 <Box>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
                     {item.name}
                   </Typography>
-                  <Typography variant="body2">{item.email}</Typography>
-                  <Typography
-                    variant="caption"
-                    color="textSecondary"
-                    sx={{ fontStyle: 'italic', mt: 0.5 }}
-                  >
+                  <Typography variant="body2" sx={{ color: '#ccc' }}>{item.email}</Typography>
+                  <Typography variant="caption" sx={{ color: '#888', fontStyle: 'italic' }}>
                     {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
                   </Typography>
                 </Box>
 
-                {/* Right side: delete icon */}
-                <IconButton
-                  edge="end"
-                  color="error"
-                  onClick={(e) => {
-                    e.stopPropagation(); // prevent triggering the navigate
-                    handleOpenDialog(item.id);
-                  }}
-                >
-                  <DeleteIcon />
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
+                  {item.account_type === 'cleaner' && item.status === 'pending' && (
+                    <IconButton color="warning" onClick={() => openApprovalDialog(item.id)}>
+                      <PendingActionsIcon />
+                    </IconButton>
+                  )}
+                  <IconButton color="error" onClick={() => openDeleteDialog(item.id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
               </ListItem>
             ))
           ) : (
             <ListItem>
-              <Typography>No data found</Typography>
+              <Typography color="gray">No data found</Typography>
             </ListItem>
           )}
         </List>
-  
+
+        {/* Pagination */}
         <Box display="flex" justifyContent="space-between" mt={3}>
           <Button variant="outlined" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
             Previous
           </Button>
-          <Button
-            variant="outlined"
-            disabled={page === totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
+          <Button variant="outlined" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>
             Next
           </Button>
         </Box>
-      </Paper>
 
-      <Dialog open={openDialog} onClose={handleCloseDialog}>
-            <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogContent>
-              Are you sure you want to delete this user?
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleCloseDialog}>Cancel</Button>
-              <Button
-                color="error"
-                onClick={async () => {
-                  await adminViewController.deleteUser(selectedUserId);
-                  handleCloseDialog();
-                  loadData(); // refresh the list
-                }}
-              >
-                Delete
-              </Button>
-            </DialogActions>
-          </Dialog>
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog}>
+          <DialogTitle>Confirm Deletion</DialogTitle>
+          <DialogContent>Are you sure you want to delete this user?</DialogContent>
+          <DialogActions>
+            <Button onClick={closeDeleteDialog}>Cancel</Button>
+            <Button color="error" onClick={handleDeleteUser}>Delete</Button>
+          </DialogActions>
+        </Dialog>
 
-    </Container>
+        {/* Approval Dialog */}
+        <Dialog open={approvalDialogOpen} onClose={closeApprovalDialog}>
+          <DialogTitle>Review Pending User</DialogTitle>
+          <DialogContent>
+            Approve or reject this cleaner registration?
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleRejectUser} color="error">Reject</Button>
+            <Button onClick={handleApproveUser} color="primary">Approve</Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </Box>
   );
 }
