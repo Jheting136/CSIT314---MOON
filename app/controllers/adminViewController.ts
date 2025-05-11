@@ -7,4 +7,6 @@ export class adminViewController {
   ): Promise<any[]> {
     return await commonModel.deleteUser(table, id);
   }
+
+
 }

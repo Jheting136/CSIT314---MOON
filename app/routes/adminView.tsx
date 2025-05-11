@@ -4,6 +4,9 @@ import { commonController } from '../controllers/commonController';
 import { adminViewController } from '../controllers/adminViewController';
 import { TextField, Button, List, ListItem, Typography, Container, Box, Paper, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 
+import DeleteIcon from '@mui/icons-material/Delete';
+import IconButton from '@mui/material/IconButton';
+
 export default function Homeowners() {
   const [homeowners, setHomeowners] = useState([]);
   const navigate = useNavigate();
@@ -88,36 +91,40 @@ export default function Homeowners() {
                   padding: '1rem',
                   borderBottom: '1px solid #ccc',
                   display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                   cursor: 'pointer',
                   '&:hover': { backgroundColor: '#eef' }
                 }}
                 onClick={() => navigate(`/viewUserProfile/${item.id}`)}
               >
-                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                  {item.name}
-                </Typography>
-                <Typography variant="body2">{item.email}</Typography>
-                <Typography
-                  variant="caption"
-                  color="textSecondary"
-                  sx={{ fontStyle: 'italic', mt: 0.5 }}
-                >
-                  {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
-                </Typography>
-                <Button
-                    variant="outlined"
-                    color="error"
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenDialog(item.id);
-                    }}
-                    sx={{ marginRight: 2 }}
+                {/* Left side: user info */}
+                <Box>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                    {item.name}
+                  </Typography>
+                  <Typography variant="body2">{item.email}</Typography>
+                  <Typography
+                    variant="caption"
+                    color="textSecondary"
+                    sx={{ fontStyle: 'italic', mt: 0.5 }}
                   >
-                    Delete
-                  </Button>
+                    {item.account_type} | {new Date(item.created_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
+
+                {/* Right side: delete icon */}
+                <IconButton
+                  edge="end"
+                  color="error"
+                  onClick={(e) => {
+                    e.stopPropagation(); // prevent triggering the navigate
+                    handleOpenDialog(item.id);
+                  }}
+                >
+                  <DeleteIcon />
+                </IconButton>
               </ListItem>
             ))
           ) : (
