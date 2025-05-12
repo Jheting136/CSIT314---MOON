@@ -1,5 +1,7 @@
 import type { CleaningService } from "../models/listingModel";
 
+import { listingController } from "../controllers/listingController";
+
 interface ListingViewProps {
   listings: CleaningService[];
 }
