@@ -7,6 +7,7 @@ export type HistoryItem = {
   location: string;
   date: string;   // ISO
   status: string;
+  rating?: number;
 };
 
 export async function fetchHistoryByUser(
