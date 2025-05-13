@@ -1,7 +1,7 @@
 // src/boundary/workHistoryView.tsx
 
 import React from 'react';
-import type { WorkHistoryItem } from '../entity/Cleaner'; 
+import type { WorkHistoryItem } from '../services/Cleaner'; 
 
 interface WorkHistoryViewProps {
   workHistory: WorkHistoryItem[];

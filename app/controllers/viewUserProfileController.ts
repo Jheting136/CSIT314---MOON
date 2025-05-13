@@ -7,6 +7,7 @@ export type User = {
   email: string;
   account_type: string;
   created_at: string;
+  bio?: string;
 };
        
 export async function fetchUserById(id: string) {
@@ -14,7 +15,7 @@ export async function fetchUserById(id: string) {
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, email, account_type, created_at')
+    .select('id, name, email, account_type, created_at,bio')
     .eq('id', id)
     .single();
 

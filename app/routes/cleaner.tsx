@@ -5,6 +5,9 @@ import { handleLogout } from "../controllers/logoutController";
 import { PortfolioController } from "../controllers/portfolioController";
 import { PortfolioImage } from "../models/portfolioImage";
 import { type HistoryItem } from "../models/userHistoryModel";
+import type { User } from '../controllers/viewUserProfileController';
+import { UserProfileService } from '../services/UserProfileServices';
+import { JobService} from '../services/JobServices';
 
 const CleanerPage: React.FC = () => {
   const [userId, setUserId] = useState<string>("");
@@ -28,110 +31,158 @@ const CleanerPage: React.FC = () => {
     start: "",
     end: "",
   });
-  const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-const [bioDraft, setBioDraft] = useState(userData?.bio || '');
+  const [bioDraft, setBioDraft] = useState(userData?.bio || '');
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [currentAvailability, setCurrentAvailability] = useState<any[]>([]);
+ const capitalizeService = (service: string): string => {
+  return service.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+};
+const STANDARD_SERVICES = [
+  "Deep Cleaning",
+  "General Cleaning",
+  "Kitchen Cleaning",
+  "Post-Renovation",
+  "Window Cleaning",
+  "Carpet Cleaning",
+  "Office Cleaning",
+  "Commercial Cleaning",
+  "Floor Maintenance"
+];
+const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SERVICES);
+
 
   // Fetch the data when the active tab changes
- useEffect(() => {
-  const id = localStorage.getItem("userId") || "";
-  setUserId(id);
-  
-  if (!id) return;
+  useEffect(() => {
+    const userId = localStorage.getItem("userId") || "";
+    setUserId(userId);
 
-  // Fetch all required data in parallel
-  const fetchUserData = async () => {
-    try {
-      setLoading(true);
-      
-      // 1. Fetch user data
-      const userPromise = supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .single();
+    if (!userId) return;
 
-      // 2. Fetch portfolio images
-      const portfolioPromise = PortfolioController.fetchImages(id);
+    const loadAll = async () => {
+      try {
+        setLoading(true);
 
-      // 3. Fetch available services (for work completed tab)
-      const servicesPromise = supabase
-        .from('jobs')
-        .select('service')
-        .eq('cleaner_id', id)
-        .eq('status', 'Completed');
+        const userProfileService = new UserProfileService(userId);
+        const jobService = new JobService(userId);
 
-      const [
-        { data: userData, error: userError },
-        portfolioImages,
-        { data: servicesData, error: servicesError }
-      ] = await Promise.all([
-        userPromise,
-        portfolioPromise,
-        servicesPromise
-      ]);
+        const [userData, services, portfolioImages] = await Promise.all([
+          userProfileService.fetchUserData(),
+          jobService.fetchAvailableServices(),
+          PortfolioController.fetchImages(userId)
+        ]);
 
-      if (userError) throw userError;
-      if (servicesError) throw servicesError;
+        setUserData(userData);
+        setBioDraft(userData.bio || '');
+        setAvailableServices(services);
+        setPortfolioImages(portfolioImages);
 
-      setUserData(userData);
-      setBioDraft(userData.bio || ''); // Initialize bio draft
-      setPortfolioImages(portfolioImages);
-      
-      // Get unique service types
-      const services = Array.from(new Set(servicesData?.map(job => job.service) || []));
-      setAvailableServices(services);
+        if (activeTab === "Work Completed") {
+          const jobs = await jobService.fetchCompletedJobs(workCompletedSortOrder, serviceFilter, dateRange);
+          setJobs(jobs);
+        } else if (activeTab === "bookings") {
+          const bookings = await jobService.fetchBookings(bookingsSortOrder);
+          setJobs(bookings);
+        } else if (activeTab === "availability") {
+          await fetchCurrentAvailability();
+        }
 
-      // Load tab-specific data
-      if (activeTab === "Work Completed") {
-        fetchCompletedJobs();
-      } else if (activeTab === "bookings") {
-        fetchBookings();
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load data");
+      } finally {
+        setLoading(false);
       }
+    };
 
-    } catch (err) {
-      console.error("Failed to fetch data:", err);
-      setError("Failed to load profile data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-    fetchUserData();
-
-    if (activeTab === "Work Completed") {
-      fetchAvailableServices();
-      fetchCompletedJobs();
-    } else if (activeTab === "bookings") {
-      fetchBookings();
-    } else if (activeTab === "portfolio") {
-      fetchPortfolioImages();
-    }
+    loadAll();
   }, [activeTab, workCompletedSortOrder, bookingsSortOrder]);
 
-  // Fetch available services for filter dropdown
-  const fetchAvailableServices = async () => {
+  const fetchCurrentAvailability = async () => {
     if (!userId) return;
 
     try {
       const { data, error } = await supabase
-        .from('jobs')
-        .select('service')
+        .from('availability')
+        .select('*')
         .eq('cleaner_id', userId)
-        .eq('status', 'Completed');
+        .order('date', { ascending: true });
 
       if (error) throw error;
-
-      // Get unique service types
-      const services = Array.from(new Set(data?.map(job => job.service) || []));
-      setAvailableServices(services);
+      
+      setCurrentAvailability(data || []);
     } catch (err) {
-      console.error("Failed to fetch available services:", err);
+      console.error("Error fetching availability:", err);
+      setError("Failed to load availability");
     }
   };
 
+  const handleServiceToggle = (service: string) => {
+    setSelectedServices(prev => 
+      prev.includes(service) 
+        ? prev.filter(s => s !== service) 
+        : [...prev, service]
+    );
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedDate(e.target.value);
+  };
+
+ const saveAvailability = async () => {
+  if (!userId || selectedServices.length === 0 || !selectedDate) {
+    alert("Please select at least one service and a date");
+    return;
+  }try {
+    // Validate services
+    const validServices = selectedServices.filter(service =>
+      STANDARD_SERVICES.includes(service)
+    );
+
+    if (validServices.length === 0) {
+      alert("Please select valid services");
+      return;
+    }
+
+    const { error } = await supabase
+      .from('availability')
+      .insert(
+        validServices.map(service => ({
+          cleaner_id: userId,
+          service,
+          date: selectedDate
+        }))
+      );
+
+    if (error) throw error;
+
+    alert("Availability saved successfully!");
+    fetchCurrentAvailability();
+    setSelectedDate("");
+    setSelectedServices([]);
+  } catch (err) {
+    console.error("Error saving availability:", err);
+    alert("Failed to save availability");
+  }
+};
+  const deleteAvailability = async (id: string) => {
+    if (!userId) return;
+
+    try {
+      const { error } = await supabase
+        .from('availability')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      fetchCurrentAvailability();
+    } catch (err) {
+      console.error("Error deleting availability:", err);
+      alert("Failed to delete availability");
+    }
+  };
   // Fetch completed jobs for 'Work Completed' tab with filters
   const fetchCompletedJobs = async () => {
     setLoading(true);
@@ -192,7 +243,7 @@ const [bioDraft, setBioDraft] = useState(userData?.bio || '');
     if (error) throw error;
 
     // Update local state
-    setUserData(prev => ({ ...prev, bio: bioDraft }));
+    setUserData((prev: User | null) => ({ ...prev!, bio: bioDraft }));
     setIsEditing(false);
   } catch (err) {
     console.error("Error updating bio:", err);
@@ -453,7 +504,7 @@ const [bioDraft, setBioDraft] = useState(userData?.bio || '');
     case "Work Completed":
   return (
     <div className="max-w-6xl mx-auto text-white">
-      <h2 className="text-2xl font-bold mb-6">Completed Work</h2>
+     
       
       {/* Filter Controls */}
       <div className="flex justify-between items-center mb-6">
@@ -519,7 +570,7 @@ const [bioDraft, setBioDraft] = useState(userData?.bio || '');
     case "portfolio":
   return (
     <div className="max-w-6xl mx-auto text-white">
-      <h2 className="text-2xl font-bold mb-6">Your Portfolio</h2>
+      
       
       {/* Upload Card */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-6 border border-gray-700">
@@ -589,26 +640,105 @@ const [bioDraft, setBioDraft] = useState(userData?.bio || '');
     </div>
   );
 
-     case "availability":
+   case "availability":
   return (
     <div className="max-w-md mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden md:max-w-2xl p-6 text-white border border-gray-700">
-      <h2 className="text-2xl font-bold mb-4">Availability Settings</h2>
+      <h2 className="text-2xl font-bold mb-4">Set Your Availability</h2>
       <p className="text-gray-300 mb-6">
-        Set your available working days and times here.
+        Select the services you provide and the dates you're available to work.
       </p>
-      <div className="space-y-4">
-        <div className="p-4 border border-gray-700 rounded bg-gray-900">
-          <p className="text-gray-400">Availability settings coming soon</p>
+      
+      <div className="space-y-6">
+        {/* Service Selection */}
+        <div>
+          <h3 className="text-lg font-semibold mb-2">Services You Provide</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {STANDARD_SERVICES.map(service => (
+              <div key={service} className="flex items-center">
+                <input
+                  type="checkbox"
+                  id={`service-${service}`}
+                  className="mr-2"
+                  checked={selectedServices.includes(service)}
+                  onChange={() => handleServiceToggle(service)}
+                />
+                <label htmlFor={`service-${service}`}>
+                  {service}
+                </label>
+              </div>
+            ))}
+          </div>
         </div>
+
+              {/* Date Selection */}
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Available Dates</h3>
+                <div className="flex flex-col space-y-4">
+                  <div>
+                    <label htmlFor="avail-date" className="block text-sm font-medium mb-1">
+                      Select Date
+                    </label>
+                    <input
+                      type="date"
+                      id="avail-date"
+                      className="w-full bg-gray-700 border border-gray-600 rounded p-2"
+                      min={new Date().toISOString().split('T')[0]}
+                      value={selectedDate}
+                      onChange={handleDateChange}
+                    />
+                  </div>
+                  
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
+                    onClick={saveAvailability}
+                    disabled={loading}
+                  >
+                    {loading ? 'Saving...' : 'Add Availability'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Current Availability List */}
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Your Current Availability</h3>
+                <div className="bg-gray-900 rounded-lg p-4">
+                  {loading ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    </div>
+                  ) : currentAvailability.length === 0 ? (
+                    <p className="text-gray-400 text-center">No availability set yet</p>
+                  ) : (
+                   <div className="space-y-2">
+  {currentAvailability.map(avail => (
+    <div key={avail.id} className="flex justify-between items-center p-2 bg-gray-800 rounded">
+      <div>
+        <span className="font-medium">
+          {capitalizeService(avail.service)}
+        </span>
+        <span className="text-gray-400 ml-2">
+          {new Date(avail.date).toLocaleDateString()}
+        </span>
       </div>
-    </div>
-  );
+                          <button
+                            onClick={() => deleteAvailability(avail.id)}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
 
      case "bookings":
   return (
     <div className="max-w-6xl mx-auto text-white">
-      <h2 className="text-2xl font-bold mb-6">Current Bookings</h2>
-      
       {/* Filter Controls */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-4">
@@ -703,7 +833,7 @@ default:
     }
   };
 
-  return (
+ return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <nav className="bg-blue-600 p-4 text-white">
         <div className="container mx-auto flex flex-col md:flex-row items-center justify-between">

@@ -1,5 +1,5 @@
 // control/cleanerController.ts
-import { CleanerEntity } from '../entity/Cleaner';
+import { CleanerEntity } from '../services/Cleaner';
 
 const cleaner = new CleanerEntity();
 
