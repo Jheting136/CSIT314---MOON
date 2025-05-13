@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { UserHistoryController } from '../controllers/userHistoryController';
 
-export default function UserHistory() {
+export default function GetHistory() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
 
@@ -12,8 +12,10 @@ export default function UserHistory() {
 
   useEffect(() => {
     (async () => {
+      if (!id) return;
       setLoading(true);
-      setItems(await UserHistoryController.list(id!));
+      const history = await UserHistoryController.getHistory(id);
+      setItems(history);
       setLoading(false);
     })();
   }, [id]);
@@ -39,7 +41,7 @@ export default function UserHistory() {
         )}
 
         <ul className="space-y-4">
-          {items.map((j) => (
+          {items.map((j, index) => (
             <li
               key={j.id}
               className="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
