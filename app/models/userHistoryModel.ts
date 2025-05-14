@@ -1,11 +1,15 @@
 import { commonModel } from './commonModel';
 
 export interface History {
+  id: string;
   service: string;
   location: string;
   date: string;
   status: string;
-  rating: number;
+  rating?: number;
+  homeowner_id?: string;
+  homeowner?: { name: string } | { name: string }[]; // Accept both formats
+  customer_name: string;
 }
 
 export async function getHistory(id: string): Promise<History[]> {

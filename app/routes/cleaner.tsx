@@ -4,7 +4,7 @@ import { UserHistoryController } from "../controllers/userHistoryController";
 import { handleLogout } from "../controllers/logoutController";
 import { PortfolioController } from "../controllers/portfolioController";
 import { PortfolioImage } from "../models/portfolioImage";
-import { type HistoryItem } from "../models/userHistoryModel";
+import { type History } from "../models/userHistoryModel";
 import type { User } from '../controllers/viewUserProfileController';
 import { UserProfileService } from '../services/UserProfileServices';
 import { JobService} from '../services/JobServices';
@@ -14,7 +14,7 @@ const CleanerPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     "profile" | "Work Completed" | "portfolio" | "availability" | "bookings"
   >("profile");
-  const [jobs, setJobs] = useState<HistoryItem[]>([]);
+  const [jobs, setJobs] = useState<History[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,10 +50,11 @@ const STANDARD_SERVICES = [
   "Commercial Cleaning",
   "Floor Maintenance"
 ];
+
 const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SERVICES);
 const [shortlistCount, setShortlistCount] = useState<number | null>(null);
-const [bookings, setBookings] = useState<HistoryItem[]>([]);
-const [completedJobs, setCompletedJobs] = useState<HistoryItem[]>([]);
+const [bookings, setBookings] = useState<History[]>([]);
+const [completedJobs, setCompletedJobs] = useState<History[]>([]);
 const [completedJobCount, setCompletedJobCount] = useState<number>(0);
 const fetchCompletedJobCount = async () => {
   if (!userId) return;
@@ -215,52 +216,49 @@ const fetchCompletedJobCount = async () => {
     setShortlistCount(null);
   }
 };
-  // Fetch completed jobs for 'Work Completed' tab with filters
-  const fetchCompletedJobs = async () => {
-    setLoading(true);
-    setError(null);
+const fetchCompletedJobs = async () => {
+  setLoading(true);
+  setError(null);
 
-    if (!userId) {
-      setError("Failed to get authenticated user");
-      setLoading(false);
-      return;
-    }
+  try {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select(`
+        id,
+        service,
+        location,
+        date,
+        status,
+        homeowner_id,
+        homeowner:homeowner_id (name)
+      `)
+      .eq('cleaner_id', userId)
+      .eq('status', 'Completed')
+      .returns<Array<{
+        id: string;
+        service: string;
+        location: string;
+        date: string;
+        status: string;
+        homeowner_id?: string;
+        homeowner?: { name: string };
+      }>>();
 
-    try {
-      let query = supabase
-        .from('jobs')
-        .select('*')
-        .eq('cleaner_id', userId)
-        .eq('status', 'Completed');
+    if (error) throw error;
 
-      // Apply service filter if selected
-      if (serviceFilter) {
-        query = query.eq('service', serviceFilter);
-      }
+    const transformedData: History[] = data?.map(job => ({
+      ...job,
+      customer_name: job.homeowner?.name || 'Unknown'
+    })) || [];
 
-      // Apply date range filter if selected
-      if (dateRange.start) {
-        query = query.gte('date', dateRange.start);
-      }
-      if (dateRange.end) {
-        query = query.lte('date', dateRange.end);
-      }
-
-      // Apply sorting
-      query = query.order('date', { ascending: workCompletedSortOrder === 'asc' });
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      setJobs(data || []);
-    } catch (err) {
-      setError("Failed to fetch completed jobs.");
-      console.error(err);
-    }
-
+    setJobs(transformedData);
+  } catch (err) {
+    setError("Failed to fetch completed jobs");
+    console.error(err);
+  } finally {
     setLoading(false);
-  };
+  }
+};
 //save bio
   const handleSaveBio = async () => {
   if (!userId) return;
@@ -286,34 +284,42 @@ const fetchCompletedJobCount = async () => {
 };
 
   // Fetch bookings for 'bookings' tab
-  const fetchBookings = async () => {
-    setLoading(true);
-    setError(null);
+const fetchBookings = async () => {
+  setLoading(true);
+  setError(null);
 
-    if (!userId) {
-      setError("Failed to get authenticated user");
-      setLoading(false);
-      return;
-    }
+  try {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select(`
+        id,
+        service,
+        location,
+        date,
+        status,
+        homeowner_id,
+        homeowner:homeowner_id (name)
+      `)
+      .eq('cleaner_id', userId)
+      .in('status', ['Pending', 'Approved', 'Rejected'])
+      .order('date', { ascending: bookingsSortOrder === 'asc' });
 
-    try {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('cleaner_id', userId)
-        .in('status', ['Pending', 'Approved', 'Rejected'])
-        .order('date', { ascending: bookingsSortOrder === 'asc' });
-      
-      if (error) throw error;
-      
-      setJobs(data || []);
-    } catch (err) {
-      setError("Failed to fetch bookings.");
-      console.error(err);
-    }
+    if (error) throw error;
 
+    // Transform data to include customer_name
+    const transformedData = data?.map((job: any) => ({
+  ...job,
+  customer_name: job.homeowner?.name || 'Unknown'
+})) as History[] || [];
+
+    setJobs(transformedData);
+  } catch (err) {
+    setError("Failed to fetch bookings");
+    console.error(err);
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   // Function to get the color based on job status
   const getStatusColor = (status: string) => {
@@ -421,25 +427,26 @@ const fetchCompletedJobCount = async () => {
   };
 
   // Update job status
-  const updateJobStatus = async (jobId: string, newStatus: string) => {
+ const updateJobStatus = async (jobId: string, newStatus: string): Promise<void> => {
   try {
     const { error } = await supabase
       .from('jobs')
       .update({ status: newStatus })
       .eq('id', jobId);
-    
+
     if (error) throw error;
-    
-    // Refresh bookings after update
-    fetchBookings();
-    
-    // Show success message
-    alert(`Job status updated to ${newStatus}`);
+
+    // Refresh bookings with updated status and joined homeowner name
+    await fetchBookings();
+
+    // Optional: You can use a toast or snackbar instead of alert
+    alert(`Job status updated to "${newStatus}"`);
   } catch (err) {
     console.error("Error updating job status:", err);
-    alert("Failed to update job status");
+    alert("Failed to update job status.");
   }
 };
+
 useEffect(() => {
   if (activeTab === "profile" && userId) {
     fetchShortlistCount();
