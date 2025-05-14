@@ -58,4 +58,18 @@ export class JobService {
     if (error) throw error;
     return Array.from(new Set(data?.map(job => job.service) || []));
   }
+
+// In JobService.ts
+async reportJob(jobId: string, reason: string): Promise<void> {
+  const { error } = await supabase
+    .from('job_reports')
+    .insert({
+      job_id: jobId,
+      reporter_id: this.userId,
+      reason,
+      reported_at: new Date().toISOString()
+    });
+  
+  if (error) throw error;
+}
 }

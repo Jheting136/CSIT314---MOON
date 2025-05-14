@@ -51,6 +51,27 @@ const STANDARD_SERVICES = [
   "Floor Maintenance"
 ];
 const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SERVICES);
+const [shortlistCount, setShortlistCount] = useState<number | null>(null);
+const [bookings, setBookings] = useState<HistoryItem[]>([]);
+const [completedJobs, setCompletedJobs] = useState<HistoryItem[]>([]);
+const [completedJobCount, setCompletedJobCount] = useState<number>(0);
+const fetchCompletedJobCount = async () => {
+  if (!userId) return;
+  try {
+    const { count, error } = await supabase
+      .from('jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('cleaner_id', userId)
+      .eq('status', 'Completed');
+
+    if (error) throw error;
+    setCompletedJobCount(count || 0);
+  } catch (err) {
+    console.error("Failed to fetch completed job count:", err);
+    setCompletedJobCount(0);
+  }
+};
+
 
 
   // Fetch the data when the active tab changes
@@ -117,6 +138,7 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
       setError("Failed to load availability");
     }
   };
+  
 
   const handleServiceToggle = (service: string) => {
     setSelectedServices(prev => 
@@ -183,6 +205,16 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
       alert("Failed to delete availability");
     }
   };
+//Fetch homeowner view cleaner profile
+  const fetchShortlistCount = async () => {
+  try {
+    const count = await new UserProfileService(userId).getShortlistCount();
+    setShortlistCount(count);
+  } catch (err) {
+    console.error("Failed to fetch shortlist count:", err);
+    setShortlistCount(null);
+  }
+};
   // Fetch completed jobs for 'Work Completed' tab with filters
   const fetchCompletedJobs = async () => {
     setLoading(true);
@@ -390,36 +422,53 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
 
   // Update job status
   const updateJobStatus = async (jobId: string, newStatus: string) => {
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .update({ status: newStatus })
-        .eq('id', jobId);
-      
-      if (error) throw error;
-      
-      // Refresh bookings after update
-      fetchBookings();
-    } catch (err) {
-      console.error("Error updating job status:", err);
-      alert("Failed to update job status");
-    }
-  };
+  try {
+    const { error } = await supabase
+      .from('jobs')
+      .update({ status: newStatus })
+      .eq('id', jobId);
+    
+    if (error) throw error;
+    
+    // Refresh bookings after update
+    fetchBookings();
+    
+    // Show success message
+    alert(`Job status updated to ${newStatus}`);
+  } catch (err) {
+    console.error("Error updating job status:", err);
+    alert("Failed to update job status");
+  }
+};
+useEffect(() => {
+  if (activeTab === "profile" && userId) {
+    fetchShortlistCount();
+    fetchCompletedJobCount(); 
+  }
+}, [activeTab, userId]);
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "profile":
-        return (
-          <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 text-white border border-gray-700">
-  <div className="flex justify-between items-center mb-6">
-    <h2 className="text-2xl font-bold">Cleaner Profile</h2>
-    <button
-      onClick={() => setIsEditing(!isEditing)}
-      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
-    >
-      {isEditing ? 'Cancel' : 'Edit Profile'}
-    </button>
-  </div>
+  return (
+    <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 text-white border border-gray-700">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Cleaner Profile</h2>
+        <div className="flex items-center">
+          {shortlistCount !== null && (
+            <div className="mr-4 bg-blue-600 px-3 py-1 rounded-full flex items-center">
+              <span className="mr-1">⭐</span>
+              <span>{shortlistCount} shortlists</span>
+            </div>
+          )}
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+          >
+            {isEditing ? 'Cancel' : 'Edit Profile'}
+          </button>
+        </div>
+      </div>
 
   {userData && (
     <div className="space-y-6">
@@ -497,15 +546,33 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
         </button>
       </div>
     </div>
-  )}
+  )}<div className="bg-gray-900 p-4 rounded-lg border border-gray-700 mt-6">
+        <h3 className="text-lg font-semibold mb-3">Profile Statistics</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-blue-900/30 p-3 rounded-lg">
+            <p className="text-gray-400">Times Shortlisted</p>
+            <p className="text-2xl font-bold">
+              {shortlistCount !== null ? shortlistCount : "Data unavailable"}
+            </p>
+            <p className="text-sm text-gray-400 mt-1">
+              Number of users who saved your profile
+            </p>
+          </div>
+          <div className="bg-green-900/30 p-3 rounded-lg">
+            <p className="text-gray-400">Completed Jobs</p>
+             <p className="text-2xl font-bold">{completedJobCount}</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Total jobs successfully completed
+            </p>
+          </div>
+        </div>
+      </div>
 </div>
         );
 
     case "Work Completed":
   return (
     <div className="max-w-6xl mx-auto text-white">
-     
-      
       {/* Filter Controls */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-4">
@@ -549,15 +616,114 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
             <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-semibold text-lg">{job.service?.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</p>
+                  <p className="font-semibold text-lg">
+                    {job.service?.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                  </p>
                   <p className="text-gray-300">{job.location}</p>
-                  <p className="text-sm text-gray-400">{new Date(job.date).toLocaleString()}</p>
+                  <p className="text-sm text-gray-400">
+                    {new Date(job.date).toLocaleString()}
+                  </p>
+                  <p className="text-sm text-gray-300 mt-1">
+                    Customer: {job.customer_name || 'Unknown'}
+                  </p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${job.rating ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'}`}>
-                    {job.rating ? `Rating: ${job.rating}` : 'No rating'}
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      job.status === 'Pending'
+                        ? 'bg-amber-900 text-amber-300'
+                        : job.status === 'Approved'
+                        ? 'bg-green-900 text-green-300'
+                        : job.status === 'Rejected'
+                        ? 'bg-red-900 text-red-300'
+                        : job.status === 'Cancelled'
+                        ? 'bg-gray-700 text-gray-300'
+                        : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    {job.status}
                   </span>
                 </div>
+              </div>
+
+              <div className="mt-3 flex space-x-2">
+                {job.status === 'Pending' && (
+                  <>
+                    <button
+                      onClick={() => updateJobStatus(job.id, 'Approved')}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => updateJobStatus(job.id, 'Rejected')}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+                {job.status === 'Approved' && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to cancel this job? Please only cancel in case of emergencies.')) {
+                        updateJobStatus(job.id, 'Cancelled');
+                      }
+                    }}
+                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
+                    title="Cancel Job"
+                  >
+                    <svg 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      className="h-4 w-4 mr-1" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" 
+                      />
+                    </svg>
+                    Cancel
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 flex space-x-2">
+                <button
+                  onClick={async () => {
+                    const reason = prompt('Please describe the issue with this completed job:');
+                    if (reason) {
+                      try {
+                        await new JobService(userId).reportJob(job.id, reason);
+                        alert('Report submitted successfully. Admin will review your report.');
+                      } catch (error) {
+                        alert('Failed to submit report. Please try again.');
+                      }
+                    }
+                  }}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
+                  title="Report Completed Job"
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className="h-4 w-4 mr-1" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
+                    />
+                  </svg>
+                  Report
+                </button>
               </div>
             </div>
           ))}
@@ -565,7 +731,6 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
       )}
     </div>
   );
-
 
     case "portfolio":
   return (
@@ -710,16 +875,16 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
                     <p className="text-gray-400 text-center">No availability set yet</p>
                   ) : (
                    <div className="space-y-2">
-  {currentAvailability.map(avail => (
-    <div key={avail.id} className="flex justify-between items-center p-2 bg-gray-800 rounded">
-      <div>
-        <span className="font-medium">
-          {capitalizeService(avail.service)}
-        </span>
-        <span className="text-gray-400 ml-2">
-          {new Date(avail.date).toLocaleDateString()}
-        </span>
-      </div>
+                       {currentAvailability.map(avail => (
+                   <div key={avail.id} className="flex justify-between items-center p-2 bg-gray-800 rounded">
+                   <div>
+                    <span className="font-medium">
+                         {capitalizeService(avail.service)}
+                    </span>
+                    <span className="text-gray-400 ml-2">
+                     {new Date(avail.date).toLocaleDateString()}
+                     </span>
+                    </div>
                           <button
                             onClick={() => deleteAvailability(avail.id)}
                             className="text-red-400 hover:text-red-300"
@@ -738,88 +903,157 @@ const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SE
 
      case "bookings":
   return (
-    <div className="max-w-6xl mx-auto text-white">
-      {/* Filter Controls */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-black mr-2">Sort by:</span>
-          <select
-            className="bg-gray-800 text-white border border-gray-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onChange={(e) => {
-              if (e.target.value === 'date-asc' || e.target.value === 'date-desc') {
-                setBookingsSortOrder(e.target.value === 'date-asc' ? 'asc' : 'desc');
-                fetchBookings();
-              } else if (e.target.value === 'service-asc' || e.target.value === 'service-desc') {
-                setJobs(prevJobs => [...prevJobs].sort((a, b) => {
-                  const comparison = a.service.localeCompare(b.service);
-                  return e.target.value === 'service-asc' ? comparison : -comparison;
-                }));
-              }
-            }}
-          >
-            <option value="date-desc">Newest First ▼</option>
-            <option value="date-asc">Oldest First ▲</option>
-            <option value="service-asc">Service A-Z</option>
-            <option value="service-desc">Service Z-A</option>
-          </select>
-        </div>
+  <div className="max-w-6xl mx-auto text-white">
+    {/* Filter Controls */}
+    <div className="flex justify-between items-center mb-6">
+      <div className="flex items-center space-x-4">
+        <span className="text-sm text-black mr-2">Sort by:</span>
+        <select
+          className="bg-gray-800 text-white border border-gray-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onChange={(e) => {
+            if (e.target.value === 'date-asc' || e.target.value === 'date-desc') {
+              setBookingsSortOrder(e.target.value === 'date-asc' ? 'asc' : 'desc');
+              fetchBookings();
+            } else if (e.target.value === 'service-asc' || e.target.value === 'service-desc') {
+              setJobs(prevJobs => [...prevJobs].sort((a, b) => {
+                const comparison = a.service.localeCompare(b.service);
+                return e.target.value === 'service-asc' ? comparison : -comparison;
+              }));
+            }
+          }}
+        >
+          <option value="date-desc">Newest First ▼</option>
+          <option value="date-asc">Oldest First ▲</option>
+          <option value="service-asc">Service A-Z</option>
+          <option value="service-desc">Service Z-A</option>
+        </select>
       </div>
+    </div>
 
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      ) : error ? (
-        <p className="text-red-400">{error}</p>
-      ) : jobs.length === 0 ? (
-        <div className="bg-gray-800 p-8 rounded-lg text-center border border-gray-700">
-          <p className="text-gray-400">No bookings found.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {jobs.map((job) => (
-            <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold text-lg">{job.service?.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</p>
-                  <p className="text-gray-300">{job.location}</p>
-                  <p className="text-sm text-gray-400">
-                    {new Date(job.date).toLocaleString()}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      job.status === 'Pending'
-                        ? 'bg-amber-900 text-amber-300'
-                        : job.status === 'Approved'
-                        ? 'bg-green-900 text-green-300'
-                        : job.status === 'Rejected'
-                        ? 'bg-red-900 text-red-300'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    {job.status}
-                  </span>
-                </div>
+    {loading ? (
+      <div className="flex justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    ) : error ? (
+      <p className="text-red-400">{error}</p>
+    ) : jobs.length === 0 ? (
+      <div className="bg-gray-800 p-8 rounded-lg text-center border border-gray-700">
+        <p className="text-gray-400">No bookings found.</p>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        {jobs.map((job) => (
+          <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="font-semibold text-lg">
+                  {job.service?.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </p>
+                <p className="text-gray-300">{job.location}</p>
+                <p className="text-sm text-gray-400">
+                  {new Date(job.date).toLocaleString()}
+                </p>
+                <p className="text-sm text-gray-300 mt-1">
+                  Customer: {job.customer_name || 'Unknown'}
+                </p>
               </div>
+              <div className="flex items-center space-x-2">
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    job.status === 'Pending'
+                      ? 'bg-amber-900 text-amber-300'
+                      : job.status === 'Approved'
+                      ? 'bg-green-900 text-green-300'
+                      : job.status === 'Rejected'
+                      ? 'bg-red-900 text-red-300'
+                      : job.status === 'Cancelled'
+                      ? 'bg-gray-700 text-gray-300'
+                      : 'bg-gray-700 text-gray-300'
+                  }`}
+                >
+                  {job.status}
+                </span>
+              </div>
+            </div>
 
+            <div className="mt-3 flex space-x-2">
               {job.status === 'Pending' && (
-                <div className="mt-3 flex space-x-2">
-                  <button
-                    onClick={() => updateJobStatus(job.id, 'Approved')}
-                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => updateJobStatus(job.id, 'Rejected')}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
+                  <>
+                    <button
+                      onClick={() => updateJobStatus(job.id, 'Approved')}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => updateJobStatus(job.id, 'Rejected')}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+                {job.status === 'Approved' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to cancel this job? Please only cancel in case of emergencies.')) {
+                          updateJobStatus(job.id, 'Cancelled');
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
+                      title="Cancel Job"
+                    >
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        className="h-4 w-4 mr-1" 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" 
+                        />
+                      </svg>
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const reason = prompt('Please describe the issue with this client:');
+                        if (reason) {
+                          try {
+                            await new JobService(userId).reportJob(job.id, reason);
+                            alert('Report submitted successfully. Admin will review your report.');
+                          } catch (error) {
+                            alert('Failed to submit report. Please try again.');
+                          }
+                        }
+                      }}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
+                      title="Report Client"
+                    >
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        className="h-4 w-4 mr-1" 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
+                        />
+                      </svg>
+                      Report
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -841,12 +1075,17 @@ default:
             {userData?.name || 'Cleaner Dashboard'}
           </h1>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`px-3 py-2 rounded ${activeTab === 'profile' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
-            >
-              Profile
-            </button>
+          <button
+  onClick={() => setActiveTab("profile")}
+  className={`px-3 py-2 rounded flex items-center ${activeTab === 'profile' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
+>
+  Profile
+  {shortlistCount !== null && shortlistCount > 0 && (
+    <span className="ml-2 bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+      {shortlistCount}
+    </span>
+  )}
+</button>
             <button
               onClick={() => setActiveTab("Work Completed")}
               className={`px-3 py-2 rounded ${activeTab === 'Work Completed' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}

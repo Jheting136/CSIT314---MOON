@@ -23,4 +23,14 @@ export class UserProfileService {
 
     if (error) throw error;
   }
+
+  async getShortlistCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('user_shortlists')
+    .select('*', { count: 'exact' })
+    .eq('cleaner_id', this.userId);
+
+  if (error) throw error;
+  return count || 0;
+}
 }
