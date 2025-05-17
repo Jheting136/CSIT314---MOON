@@ -1,45 +1,145 @@
-import { commonModel } from './commonModel';
+import { commonModel } from "./commonModel";
 
-export interface CleanerListing {
+export interface CleaningService {
   id: string;
-  name: string;
-  rates: number;
+  provider: string;
+  title?: string;
+  description?: string;
+  price: number;
+  rating: number;
   location: string;
-  average_rating: number;
-  services_offered: string;
+  services: string[];
+}
+
+export interface CleanerFilterOptions {
+  searchTerm?: string;
+  minPrice?: number | "";
+  maxPrice?: number | "";
+  minRating: number;
+  selectedService?: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface FilteredCleanersResult {
+  data: CleaningService[];
+  totalCount: number;
+}
+
+export interface DatabaseResponse {
+  data: any[];
+  count: number;
 }
 
 export class listingModel {
-  static async fetchListings(
-    additionalFilters: { column: string; operator: string; value: any }[] | null = null,
-    page = 1,
-    pageSize = 12
-  ): Promise<{ data: CleanerListing[]; count: number }> {
-    // Base filters to ensure we only get active cleaners
-    const baseFilters = [
-      { column: 'account_type', operator: 'eq', value: 'cleaner' },
-      { column: 'status', operator: 'eq', value: 'active' }
+  static async fetchFilteredCleaners(
+    options: CleanerFilterOptions
+  ): Promise<FilteredCleanersResult> {
+    const filters = this.buildFilters(options);
+    try {
+      // Select fields without aliases
+      const fields = `
+        id,
+        name,
+        bio,
+        rates,
+        average_rating,
+        location,
+        services_offered
+      `;
+
+      const rawResponse = await commonModel.getData(
+        "users",
+        fields.trim(),
+        filters,
+        options.page,
+        options.pageSize
+      );
+
+      if (!this.isDatabaseResponse(rawResponse)) {
+        throw new Error("Invalid response format from database");
+      }
+
+      const transformedData = rawResponse.data.map((item: any) => ({
+        id: item.id,
+        provider: item.name || "",
+        description: item.bio || "",
+        price: Number(item.rates) || 0,
+        rating: Number(item.average_rating) || 0,
+        location: item.location || "",
+        services: Array.isArray(item.services_offered)
+          ? item.services_offered
+          : [],
+      }));
+
+      return {
+        data: transformedData,
+        totalCount: rawResponse.count,
+      };
+    } catch (error) {
+      console.error("[ListingModel] Error fetching cleaners:", error);
+      throw new Error("Failed to fetch cleaner listings");
+    }
+  }
+
+  private static isDatabaseResponse(
+    response: unknown
+  ): response is DatabaseResponse {
+    return (
+      typeof response === "object" &&
+      response !== null &&
+      "data" in response &&
+      "count" in response &&
+      Array.isArray((response as DatabaseResponse).data)
+    );
+  }
+
+  private static buildFilters(options: CleanerFilterOptions) {
+    const filters: { column: string; operator: string; value: any }[] = [
+      { column: "account_type", operator: "eq", value: "cleaner" },
+      { column: "status", operator: "eq", value: "active" },
     ];
 
-    // Merge base filters with any additional filters (if provided)
-    const allFilters = additionalFilters ? [...baseFilters, ...additionalFilters] : baseFilters;
-
-    // Query the users table
-    const { data, count, error } = await commonModel.getData(
-      'users',
-      'id, name, rates, location, average_rating, services_offered',
-      allFilters,
-      page,
-      pageSize
-    );
-
-    if (error || !data) {
-      throw new Error('Failed to fetch cleaner listings.');
+    if (options.searchTerm) {
+      filters.push({
+        column: "name",
+        operator: "ilike",
+        value: `%${options.searchTerm}%`,
+      });
     }
 
-    return {
-      data: data as CleanerListing[],
-      count
-    };
+    if (options.minPrice !== undefined && options.minPrice !== "") {
+      filters.push({
+        column: "rates",
+        operator: "gte",
+        value: options.minPrice,
+      });
+    }
+
+    if (options.maxPrice !== undefined && options.maxPrice !== "") {
+      filters.push({
+        column: "rates",
+        operator: "lte",
+        value: options.maxPrice,
+      });
+    }
+
+    if (options.minRating > 0) {
+      filters.push({
+        column: "average_rating",
+        operator: "gte",
+        value: options.minRating,
+      });
+    }
+
+    if (options.selectedService) {
+      filters.push({
+        column: "services_offered",
+        operator: "contains",
+        value: [options.selectedService],
+      });
+    }
+
+    return filters;
   }
 }
