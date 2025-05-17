@@ -10,8 +10,8 @@ import { listingController } from "~/controllers/listingController";
 import {
   type CleanerFilterOptions,
   type FilteredCleanersResult,
-} from "../models/listingModel";
-import type { CleaningService } from "../models/listingModel";
+} from "../controllers/listingController";
+import type { CleaningService } from "../controllers/listingController";
 
 // This could also be fetched or be part of a shared constants file
 const availableServices = [

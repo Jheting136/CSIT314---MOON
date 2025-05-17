@@ -2,7 +2,10 @@ import { listingModel } from "../models/listingModel";
 import type {
   CleanerFilterOptions,
   FilteredCleanersResult,
+  CleaningService,
 } from "../models/listingModel";
+
+export type { CleanerFilterOptions, FilteredCleanersResult, CleaningService };
 
 export class listingController {
   static async fetchAndFilterCleaners(
