@@ -12,7 +12,6 @@ import {
 } from "../controllers/listingController";
 import type { CleaningService } from "../controllers/listingController";
 import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
 
 const availableServices = [
   "General Cleaning",
@@ -39,7 +38,6 @@ function goToManageAccount() {
 }
 
 export default function HomeownerPage() {
-  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [minPrice, setMinPrice] = useState<number | "">("");
   const [maxPrice, setMaxPrice] = useState<number | "">("");
