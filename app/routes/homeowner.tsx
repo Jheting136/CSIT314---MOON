@@ -1,4 +1,3 @@
-// Full Code/app/routes/homeowner.tsx
 import React, {
   useState,
   useEffect,
@@ -12,8 +11,9 @@ import {
   type FilteredCleanersResult,
 } from "../controllers/listingController";
 import type { CleaningService } from "../controllers/listingController";
+import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-// This could also be fetched or be part of a shared constants file
 const availableServices = [
   "General Cleaning",
   "Kitchen Cleaning",
@@ -34,7 +34,12 @@ const availableServices = [
 
 const ITEMS_PER_PAGE = 6;
 
+function goToManageAccount() {
+  window.location.href = "/manageAccount";
+}
+
 export default function HomeownerPage() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [minPrice, setMinPrice] = useState<number | "">("");
   const [maxPrice, setMaxPrice] = useState<number | "">("");
@@ -121,7 +126,13 @@ export default function HomeownerPage() {
 
   return (
     <main className="min-h-screen relative bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white p-6">
-      <div className="absolute top-6 right-6 z-50">
+      <div className="absolute top-6 right-6 z-50 flex gap-4">
+        <button
+          onClick={() => goToManageAccount()}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-lg transition-colors"
+        >
+          Manage Account
+        </button>
         <button
           onClick={handleLogout}
           className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded shadow-lg transition-colors"

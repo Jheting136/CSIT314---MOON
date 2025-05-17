@@ -11,6 +11,6 @@ export default [
   route("homeowner", "routes/homeowner.tsx"),
   route("editUser/:id", "routes/EditUser.tsx"),
   route("userHistory/:id", "routes/UserHistory.tsx"),
-  route("reset-password", "routes/ResetPasswordPage.tsx"),
+  route("manageAccount", "routes/manageAccount.tsx"),
   route("test", "routes/testpage.tsx"), //put all your routes above here testpage is not for production
 ] satisfies RouteConfig;
