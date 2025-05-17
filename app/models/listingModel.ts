@@ -132,11 +132,12 @@ export class listingModel {
       });
     }
 
+    // Modified filter for services_offered array column
     if (options.selectedService) {
       filters.push({
         column: "services_offered",
-        operator: "contains",
-        value: [options.selectedService],
+        operator: "cs", // cs operator for array contains in PostgreSQL
+        value: `{${options.selectedService}}`, // Wrap the service in curly braces for array literal
       });
     }
 
