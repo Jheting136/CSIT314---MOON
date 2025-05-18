@@ -5,6 +5,7 @@ export interface UpdateProfileData {
   email?: string;
   currentPassword?: string;
   newPassword?: string;
+  hourlyRate?: number;
 }
 
 export class accountController {

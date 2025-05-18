@@ -8,9 +8,11 @@ export default function ManageAccount() {
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+    hourlyRate: "",
   });
   const [message, setMessage] = useState({ type: "", content: "" });
   const [loading, setLoading] = useState(false);
+  const [userType, setUserType] = useState<string | null>(null);
 
   useEffect(() => {
     // Load current user data
@@ -21,7 +23,11 @@ export default function ManageAccount() {
           ...prev,
           name: userData.name || "",
           email: userData.email || "",
+          hourlyRate: userData.hourlyRate?.toString() || "",
         }));
+
+        const userType = localStorage.getItem("userType");
+        setUserType(userType);
       } catch (error) {
         setMessage({ type: "error", content: "Failed to load user data" });
       }
@@ -30,7 +36,11 @@ export default function ManageAccount() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const value =
+      e.target.name === "hourlyRate"
+        ? e.target.value.replace(/[^\d.]/g, "") // Only allow numbers and decimal point
+        : e.target.value;
+    setFormData({ ...formData, [e.target.name]: value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,6 +63,9 @@ export default function ManageAccount() {
         email: formData.email,
         currentPassword: formData.currentPassword,
         newPassword: formData.newPassword,
+        hourlyRate: formData.hourlyRate
+          ? parseFloat(formData.hourlyRate)
+          : undefined,
       });
 
       setMessage({ type: "success", content: "Profile updated successfully" });
@@ -63,6 +76,10 @@ export default function ManageAccount() {
         newPassword: "",
         confirmPassword: "",
       }));
+
+      setTimeout(() => {
+        window.location.href = "/" + userType;
+      }, 1500); // Give user time to see success message
     } catch (error) {
       setMessage({
         type: "error",
@@ -92,6 +109,22 @@ export default function ManageAccount() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {userType && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Hourly Rate ($)
+              </label>
+              <input
+                type="text"
+                name="hourlyRate"
+                value={formData.hourlyRate}
+                onChange={handleChange}
+                placeholder="0.00"
+                className="w-full px-4 py-3 bg-gray-800 rounded-lg border border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Name

@@ -1,5 +1,5 @@
 // controllers/viewUserProfileController.ts
-import { supabase } from '../lib/supabaseClient';      
+import { supabase } from "../lib/supabaseClient";
 
 export type User = {
   id: string;
@@ -7,20 +7,21 @@ export type User = {
   email: string;
   account_type: string;
   created_at: string;
+  rates?: any;
   bio?: string;
 };
-       
+
 export async function fetchUserById(id: string) {
   if (!id) return null;
 
   const { data, error } = await supabase
-    .from('users')
-    .select('id, name, email, account_type, created_at,bio')
-    .eq('id', id)
+    .from("users")
+    .select("id, name, email, account_type, created_at,bio")
+    .eq("id", id)
     .single();
 
   if (error) {
-    console.error('[Supabase] fetchUserById:', error.message);
+    console.error("[Supabase] fetchUserById:", error.message);
     return null;
   }
   return data as User;
