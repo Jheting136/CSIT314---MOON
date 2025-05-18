@@ -1,11 +1,5 @@
 // File: app/routes/cleaner.tsx
-// This component serves as the Boundary for the Cleaner's dashboard.
-// It handles UI rendering, user interactions, and delegates business logic to controllers.
-
-// --- Core React Imports ---
 import React, { useEffect, useState, useCallback } from "react";
-
-// --- Controller Imports ---
 import { 
     CleanerDashboardController, 
     type PortfolioImage, 
@@ -14,19 +8,16 @@ import {
 } from '../controllers/CleanerDashboardController'; 
 import { handleLogout } from "../controllers/logoutController"; 
 import { PortfolioController } from "../controllers/portfolioController"; 
-
-// --- Type Imports from other Controllers ---
 import type { User } from '../controllers/viewUserProfileController'; 
 
-
-// --- Constants ---
 const STANDARD_SERVICES = [
   "Deep Cleaning", "General Cleaning", "Kitchen Cleaning", "Post-Renovation",
   "Window Cleaning", "Carpet Cleaning", "Office Cleaning", "Commercial Cleaning",
   "Floor Maintenance"
 ];
 
-// --- Component Definition ---
+type SortOption = 'date-desc' | 'date-asc' | 'service-asc' | 'service-desc';
+
 const CleanerPage: React.FC = () => {
   const [userId, setUserId] = useState<string>("");
   const [controller, setController] = useState<CleanerDashboardController | null>(null);
@@ -39,6 +30,10 @@ const CleanerPage: React.FC = () => {
   const [completedJobCount, setCompletedJobCount] = useState<number>(0);
   const [portfolioImagesData, setPortfolioImagesData] = useState<PortfolioImage[]>([]);
   const [currentAvailabilityData, setCurrentAvailabilityData] = useState<AvailabilityRecord[]>([]);
+  
+  // This state will hold the raw data from the controller
+  const [rawJobsData, setRawJobsData] = useState<JobHistoryItem[]>([]);
+  // This state will hold the data to be displayed (potentially sorted client-side for service)
   const [jobsForDisplay, setJobsForDisplay] = useState<JobHistoryItem[]>([]);
 
   const [loading, setLoading] = useState(true); 
@@ -52,8 +47,9 @@ const CleanerPage: React.FC = () => {
   const [selectedServicesForAvail, setSelectedServicesForAvail] = useState<string[]>([]);
   const [selectedDateForAvail, setSelectedDateForAvail] = useState<string>("");
 
-  const [workCompletedSortOrder, setWorkCompletedSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [bookingsSortOrder, setBookingsSortOrder] = useState<'asc' | 'desc'>('asc');
+  // Unified sort state for bookings and work completed
+  const [currentSortOption, setCurrentSortOption] = useState<SortOption>('date-desc');
+
 
   useEffect(() => {
     const id = localStorage.getItem("userId");
@@ -68,12 +64,13 @@ const CleanerPage: React.FC = () => {
 
   const loadDataForCurrentTab = useCallback(async () => {
     if (!controller || !userId) { 
-        if (!controller && !error) setLoading(true); // Keep loading if controller is not ready and no critical error
+        if (!controller && !error) setLoading(true);
         return;
     }
 
     setLoading(true);
     setError(null); 
+    let fetchedJobs: JobHistoryItem[] = [];
 
     try {
       switch (activeTab) {
@@ -83,17 +80,20 @@ const CleanerPage: React.FC = () => {
           setBioDraft(profileData.userData?.bio || '');
           setShortlistCount(profileData.shortlistCount);
           setCompletedJobCount(profileData.completedJobCount);
-          // Fetch portfolio images for the profile preview
           const imagesForProfile = await PortfolioController.fetchImages(userId);
           setPortfolioImagesData(imagesForProfile);
           break;
         case "Work Completed":
-          const completedJobs = await controller.getWorkHistory(workCompletedSortOrder);
-          setJobsForDisplay(completedJobs);
+          // For date sort, controller handles it. For service sort, we fetch by date then sort client-side.
+          const dateSortForWork = currentSortOption === 'date-asc' ? 'asc' : 'desc';
+          fetchedJobs = await controller.getWorkHistory(dateSortForWork);
+          setRawJobsData(fetchedJobs);
           break;
         case "bookings":
-          const currentBookings = await controller.getBookings(bookingsSortOrder);
-          setJobsForDisplay(currentBookings);
+          const dateSortForBookings = currentSortOption === 'date-asc' ? 'asc' : 'desc';
+          fetchedJobs = await controller.getBookings(dateSortForBookings);
+          console.log("Fetched Bookings Data:", fetchedJobs); // DEBUG LINE
+          setRawJobsData(fetchedJobs);
           break;
         case "availability":
           const availability = await controller.getCurrentAvailability();
@@ -109,23 +109,34 @@ const CleanerPage: React.FC = () => {
     } catch (err: any) {
       console.error(`CleanerPage: Error loading data for tab '${activeTab}':`, err);
       setError(err.message || "An unexpected error occurred while loading data.");
+      setRawJobsData([]); // Clear data on error
     } finally {
       setLoading(false);
     }
-  }, [activeTab, controller, userId, workCompletedSortOrder, bookingsSortOrder]); 
+  }, [activeTab, controller, userId, currentSortOption]); // currentSortOption triggers re-fetch for date sorts
+
+  // Effect to apply client-side sorting or pass through raw data
+  useEffect(() => {
+    let processedJobs = [...rawJobsData];
+    if (currentSortOption === 'service-asc') {
+      processedJobs.sort((a, b) => a.service.localeCompare(b.service));
+    } else if (currentSortOption === 'service-desc') {
+      processedJobs.sort((a, b) => b.service.localeCompare(a.service));
+    }
+    // For date sorts, rawJobsData is already sorted by the controller
+    setJobsForDisplay(processedJobs);
+  }, [rawJobsData, currentSortOption]);
+
 
   useEffect(() => {
     if (controller && userId) { 
       loadDataForCurrentTab();
     }
-  }, [controller, userId, loadDataForCurrentTab]); 
+  }, [controller, userId, loadDataForCurrentTab]); // loadDataForCurrentTab is a dependency
 
 
   const handleSaveBio = async () => {
-    if (!controller || !userData) {
-      alert("User data or controller not available.");
-      return;
-    }
+    if (!controller || !userData) return;
     setLoading(true); 
     try {
       const updatedUser = await controller.updateUserBio(bioDraft);
@@ -146,50 +157,37 @@ const CleanerPage: React.FC = () => {
   };
 
   const handlePortfolioUpload = async () => {
-    if (!selectedPortfolioFile || !userId) {
-      alert("Please select a file and ensure you are logged in.");
-      return;
-    }
+    if (!selectedPortfolioFile || !userId) return;
     const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
     if (!allowedTypes.includes(selectedPortfolioFile.type)) {
-      alert("Invalid file type. Please select an image (JPEG, PNG, GIF)."); return;
+      alert("Invalid file type."); return;
     }
     const maxSize = 5 * 1024 * 1024; 
     if (selectedPortfolioFile.size > maxSize) {
-      alert("File is too large. Maximum size is 5MB."); return;
+      alert("File too large."); return;
     }
-
-    setIsUploadingPortfolio(true);
-    setError(null);
+    setIsUploadingPortfolio(true); setError(null);
     try {
       const uploadedImage = await PortfolioController.uploadImage(userId, selectedPortfolioFile);
-      setPortfolioImagesData((prevImages) => [...prevImages, uploadedImage]);
-      alert("Image uploaded successfully!");
-      setSelectedPortfolioFile(null); 
+      setPortfolioImagesData((prev) => [...prev, uploadedImage]);
+      alert("Upload successful!"); setSelectedPortfolioFile(null); 
     } catch (err: any) {
-      setError(err.message || "Portfolio image upload failed.");
-      alert(`Error: ${err.message || "Portfolio image upload failed."}`);
+      setError(err.message || "Upload failed.");
     } finally {
       setIsUploadingPortfolio(false);
     }
   };
 
   const handleDeletePortfolioImage = async (image: PortfolioImage) => {
-    if (!userId || !image.id) {
-        alert("Cannot delete image: User or Image ID missing.");
-        return;
-    }
-    if (!window.confirm("Are you sure you want to delete this portfolio image?")) return;
-
-    setLoading(true); 
-    setError(null);
+    if (!userId || !image.id) return; 
+    if (!window.confirm("Delete this image?")) return;
+    setLoading(true); setError(null);
     try {
       await PortfolioController.deleteImage(userId, image.id); 
-      setPortfolioImagesData((prevImages) => prevImages.filter((img) => img.id !== image.id));
-      alert("Image deleted successfully!");
+      setPortfolioImagesData((prev) => prev.filter((img) => img.id !== image.id));
+      alert("Image deleted!");
     } catch (err: any) {
-      setError(err.message || "Failed to delete portfolio image.");
-      alert(`Error: ${err.message || "Failed to delete portfolio image."}`);
+      setError(err.message || "Failed to delete image.");
     } finally {
       setLoading(false);
     }
@@ -208,21 +206,17 @@ const CleanerPage: React.FC = () => {
   const handleSaveAvailability = async () => {
     if (!controller) return;
     if (selectedServicesForAvail.length === 0 || !selectedDateForAvail) {
-        alert("Please select at least one service and a date for availability.");
-        return;
+        alert("Select service(s) and a date."); return;
     }
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       await controller.saveAvailability(selectedDateForAvail, selectedServicesForAvail);
-      alert("Availability saved successfully!");
+      alert("Availability saved!");
       const updatedAvailability = await controller.getCurrentAvailability();
       setCurrentAvailabilityData(updatedAvailability);
-      setSelectedDateForAvail("");
-      setSelectedServicesForAvail([]);
+      setSelectedDateForAvail(""); setSelectedServicesForAvail([]);
     } catch (err: any) {
       setError(err.message || "Failed to save availability.");
-      alert(`Error: ${err.message || "Failed to save availability."}`);
     } finally {
       setLoading(false);
     }
@@ -230,18 +224,15 @@ const CleanerPage: React.FC = () => {
 
   const handleDeleteAvailability = async (availabilityId: string) => {
     if (!controller) return;
-    if (!window.confirm("Are you sure you want to remove this availability slot? This action cannot be undone.")) return;
-    
-    setLoading(true);
-    setError(null);
+    if (!window.confirm("Remove this availability slot?")) return;
+    setLoading(true); setError(null);
     try {
       await controller.deleteAvailability(availabilityId);
       const updatedAvailability = await controller.getCurrentAvailability();
       setCurrentAvailabilityData(updatedAvailability);
-      alert("Availability slot removed.");
+      alert("Availability removed.");
     } catch (err: any) {
-      setError(err.message || "Failed to remove availability slot.");
-      alert(`Error: ${err.message || "Failed to remove availability slot."}`);
+      setError(err.message || "Failed to remove slot.");
     } finally {
       setLoading(false);
     }
@@ -249,18 +240,14 @@ const CleanerPage: React.FC = () => {
 
   const handleUpdateJobStatus = async (jobId: string, newStatus: string) => {
     if (!controller) return;
-    if (newStatus === 'Cancelled' && !window.confirm('Are you sure you want to cancel this job? This should only be done for emergencies.')) {
-        return;
-    }
-    setLoading(true);
-    setError(null);
+    if (newStatus === 'Cancelled' && !window.confirm('Cancel this job?')) return;
+    setLoading(true); setError(null);
     try {
       await controller.updateJobStatus(jobId, newStatus);
-      alert(`Job status successfully updated to "${newStatus}".`);
+      alert(`Job status updated to "${newStatus}".`);
       await loadDataForCurrentTab(); 
     } catch (err: any) {
       setError(err.message || "Failed to update job status.");
-      alert(`Error: ${err.message || "Failed to update job status."}`);
     } finally {
       setLoading(false);
     }
@@ -268,21 +255,19 @@ const CleanerPage: React.FC = () => {
 
   const handleReportJob = async (jobId: string) => {
     if (!controller) return;
-    const reason = prompt('Please describe the issue with this job or client:');
+    const reason = prompt('Describe the issue:');
     if (reason && reason.trim() !== "") { 
-        setLoading(true);
-        setError(null);
+        setLoading(true); setError(null);
         try {
             await controller.reportProblemOnJob(jobId, reason);
-            alert('Your report has been submitted. Admin will review it shortly.');
+            alert('Report submitted.');
         } catch (err: any) {
-            setError(err.message || 'Failed to submit report. Please try again.');
-            alert(`Error: ${err.message || 'Failed to submit report. Please try again.'}`);
+            setError(err.message || 'Failed to submit report.');
         } finally {
             setLoading(false);
         }
     } else if (reason !== null) { 
-        alert("Please provide a reason for the report.");
+        alert("Provide a reason for the report.");
     }
   };
   
@@ -292,26 +277,24 @@ const CleanerPage: React.FC = () => {
   };
 
   const renderTabContent = () => {
-    // Initial loading state before controller is ready or if critical error during init
     if (!controller && loading) { 
-      return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div><p className="ml-4 text-gray-300">Initializing Dashboard...</p></div>;
+      return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div><p className="ml-4 text-gray-300">Initializing...</p></div>;
     }
     if (error && !controller) { 
-        return <div className="text-red-400 bg-red-900 bg-opacity-50 p-4 rounded-md text-center">Critical Error: {error}</div>;
+        return <div className="text-red-400 p-4 text-center">Error: {error}</div>;
     }
-    // General loading for tab content after controller is ready
     if (loading) {
       return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div><p className="ml-4 text-gray-300">Loading {activeTab}...</p></div>;
     }
-    // General error display if data loading for a tab fails (after controller is ready)
     if (error) {
-      return <div className="text-red-400 bg-red-900 bg-opacity-50 p-4 rounded-md text-center">Error loading content: {error}</div>;
+      return <div className="text-red-400 p-4 text-center">Error: {error}</div>;
     }
 
     switch (activeTab) {
       case "profile":
-        if (!userData) return <p className="text-gray-400 text-center py-8">Profile data not available. Try refreshing or logging in again.</p>;
+        if (!userData) return <p className="text-gray-400 text-center py-8">Profile data loading or not available.</p>;
         return (
+          // Profile JSX (ensure it's complete and uses correct state variables)
           <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 text-white border border-gray-700">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Cleaner Profile</h2>
@@ -333,7 +316,6 @@ const CleanerPage: React.FC = () => {
                 </button>
               </div>
             </div>
-
             <div className="space-y-6">
               <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
                 <h3 className="text-lg font-semibold mb-3">Personal Information</h3>
@@ -392,72 +374,70 @@ const CleanerPage: React.FC = () => {
       case "Work Completed":
       case "bookings":
         const listTitleJobs = activeTab === "Work Completed" ? "Completed Jobs" : "Your Bookings";
-        if (jobsForDisplay.length === 0) return <p className="text-gray-400 text-center py-8">No {activeTab === "Work Completed" ? "completed jobs" : "bookings"} found.</p>;
         return (
-          // JSX for Work Completed and Bookings (ensure it uses jobsForDisplay)
           <div className="max-w-6xl mx-auto text-white">
             <h2 className="text-2xl font-bold mb-6">{listTitleJobs}</h2>
             <div className="flex justify-start items-center mb-6">
-                <span className="text-sm text-gray-300 mr-2">Sort by Date:</span>
+                <span className="text-sm text-gray-300 mr-2">Sort by:</span>
                 <select
                     className="bg-gray-800 text-white border border-gray-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={activeTab === "Work Completed" ? workCompletedSortOrder : bookingsSortOrder}
-                    onChange={(e) => {
-                        const newSortOrder = e.target.value as 'asc' | 'desc';
-                        if (activeTab === "Work Completed") setWorkCompletedSortOrder(newSortOrder);
-                        else setBookingsSortOrder(newSortOrder);
-                    }}
+                    value={currentSortOption}
+                    onChange={(e) => setCurrentSortOption(e.target.value as SortOption)}
                 >
-                    <option value="desc">Newest First</option>
-                    <option value="asc">Oldest First</option>
+                    <option value="date-desc">Date: Newest First</option>
+                    <option value="date-asc">Date: Oldest First</option>
+                    <option value="service-asc">Service: A-Z</option>
+                    <option value="service-desc">Service: Z-A</option>
                 </select>
             </div>
-            <div className="space-y-4">
-              {jobsForDisplay.map((job) => (
-                <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-semibold text-lg">{capitalizeService(job.service)}</p>
-                      <p className="text-gray-300">{job.location}</p>
-                      <p className="text-sm text-gray-400">{new Date(job.date).toLocaleString()}</p>
-                      <p className="text-sm text-gray-300 mt-1">Customer: {job.customer_name || 'Unknown'}</p>
+            {jobsForDisplay.length === 0 && <p className="text-gray-400 text-center py-8">No {activeTab === "Work Completed" ? "completed jobs" : "bookings"} found.</p>}
+            {jobsForDisplay.length > 0 && (
+                <div className="space-y-4">
+                {jobsForDisplay.map((job) => (
+                    <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
+                    <div className="flex justify-between items-start">
+                        <div>
+                        <p className="font-semibold text-lg">{capitalizeService(job.service)}</p>
+                        <p className="text-gray-300">{job.location}</p>
+                        <p className="text-sm text-gray-400">{new Date(job.date).toLocaleString()}</p>
+                        <p className="text-sm text-gray-300 mt-1">Customer: {job.customer_name || 'Unknown'}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${ job.status === 'Pending' ? 'bg-amber-900 text-amber-300' : job.status === 'Approved' ? 'bg-green-900 text-green-300' : job.status === 'Rejected' ? 'bg-red-900 text-red-300' : job.status === 'Cancelled' ? 'bg-gray-700 text-gray-300' : 'bg-blue-900 text-blue-300' }`}>
+                        {job.status}
+                        </span>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${ job.status === 'Pending' ? 'bg-amber-900 text-amber-300' : job.status === 'Approved' ? 'bg-green-900 text-green-300' : job.status === 'Rejected' ? 'bg-red-900 text-red-300' : job.status === 'Cancelled' ? 'bg-gray-700 text-gray-300' : 'bg-blue-900 text-blue-300' }`}>
-                      {job.status}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex space-x-2">
-                    {job.status === 'Pending' && (
-                      <>
-                        <button onClick={() => handleUpdateJobStatus(job.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">Approve</button>
-                        <button onClick={() => handleUpdateJobStatus(job.id, 'Rejected')} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Reject</button>
-                      </>
-                    )}
-                    {job.status === 'Approved' && (
-                      <>
-                        <button onClick={() => handleUpdateJobStatus(job.id, 'Cancelled')} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm">Cancel Job</button>
-                        <button onClick={() => handleReportJob(job.id)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm">Report Client</button>
-                      </>
-                    )}
-                     {job.status === 'Completed' && activeTab === "Work Completed" && (
-                        <button onClick={() => handleReportJob(job.id)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm">Report Issue</button>
-                     )}
-                  </div>
+                    <div className="mt-3 flex space-x-2">
+                        {job.status === 'Pending' && (
+                        <>
+                            <button onClick={() => handleUpdateJobStatus(job.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">Approve</button>
+                            <button onClick={() => handleUpdateJobStatus(job.id, 'Rejected')} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Reject</button>
+                        </>
+                        )}
+                        {job.status === 'Approved' && (
+                        <>
+                            <button onClick={() => handleUpdateJobStatus(job.id, 'Cancelled')} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm">Cancel Job</button>
+                            <button onClick={() => handleReportJob(job.id)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm">Report Client</button>
+                        </>
+                        )}
+                        {job.status === 'Completed' && activeTab === "Work Completed" && (
+                            <button onClick={() => handleReportJob(job.id)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm">Report Issue</button>
+                        )}
+                    </div>
+                    </div>
+                ))}
                 </div>
-              ))}
-            </div>
+            )}
           </div>
         );
 
       case "portfolio":
-        // This is the crucial part for the upload UI
         if (!userId) { 
             return <p className="text-orange-400 text-center py-8">User ID not available. Cannot manage portfolio.</p>;
         }
         return (
+          // Portfolio JSX (ensure it uses portfolioImagesData, handlePortfolioUpload, etc.)
           <div className="max-w-6xl mx-auto text-white">
             <h2 className="text-2xl font-bold mb-6">Manage Your Portfolio</h2>
-            {/* Upload Card - THIS IS THE UI THAT WAS MISSING */}
             <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-6 border border-gray-700">
               <div className="flex items-center mb-4">
                 <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer mr-2 inline-block transition-colors">
@@ -475,9 +455,6 @@ const CleanerPage: React.FC = () => {
               </div>
               <p className="text-sm text-gray-400">Upload images of your work (max 5MB, JPG/PNG/GIF).</p>
             </div>
-            {/* End of Upload Card */}
-
-            {/* Image Grid */}
             {isUploadingPortfolio && <p className="text-gray-400 text-center py-4">Uploading image...</p> }
             {!isUploadingPortfolio && portfolioImagesData.length === 0 && 
               <p className="text-gray-400 text-center py-8">No portfolio images yet. Upload some to showcase your work!</p>
@@ -500,8 +477,7 @@ const CleanerPage: React.FC = () => {
         );
 
       case "availability":
-        // JSX for Availability tab
-        // Ensure it uses currentAvailabilityData, handleSaveAvailability, etc.
+        // Availability JSX (ensure it uses currentAvailabilityData, handleSaveAvailability, etc.)
         return (
           <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg p-6 text-white border border-gray-700">
             <h2 className="text-2xl font-bold mb-4">Set Your Availability</h2>
@@ -547,17 +523,10 @@ const CleanerPage: React.FC = () => {
     }
   };
 
-  if (!userId && !controller && !error) { 
+  if (!userId || !controller) { 
+      if (error) return <div className="min-h-screen flex justify-center items-center bg-gray-900 text-red-400 p-6 text-xl">{error}</div>;
       return <div className="min-h-screen flex justify-center items-center bg-gray-900"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div><p className="ml-4 text-xl text-gray-300">Initializing Dashboard...</p></div>;
   }
-  if (error && !controller) { // Error during controller/userId initialization
-      return <div className="min-h-screen flex justify-center items-center bg-gray-900 text-red-400 p-6 text-xl">{error}</div>;
-  }
-  // If userId is missing after initial effect and no error was set for it (should be caught by initial useEffect)
-  if (!userId && !loading && !error) { 
-      return <div className="min-h-screen flex justify-center items-center bg-gray-900 text-orange-400 p-6 text-xl">User not authenticated. Please log in.</div>;
-  }
-
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white font-sans">
