@@ -109,7 +109,7 @@ export default function ManageAccount() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {userType && (
+          {userType === "cleaner" && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Hourly Rate ($)
