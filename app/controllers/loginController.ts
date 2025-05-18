@@ -14,6 +14,7 @@ export async function handleLogin(
 
   // Save user ID to local storage
   localStorage.setItem("userId", data.id);
+  localStorage.setItem("userType", profile.account_type);
 
   const role = profile.account_type;
 
