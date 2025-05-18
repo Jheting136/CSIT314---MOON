@@ -1,1125 +1,587 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
-import { UserHistoryController } from "../controllers/userHistoryController";
-import { handleLogout } from "../controllers/logoutController";
-import { PortfolioController } from "../controllers/portfolioController";
-import { PortfolioImage } from "../models/portfolioImage";
-import { type History } from "../models/userHistoryModel";
-import type { User } from '../controllers/viewUserProfileController';
-import { UserProfileService } from '../services/UserProfileServices';
-import { JobService} from '../services/JobServices';
+// File: app/routes/cleaner.tsx
+// This component serves as the Boundary for the Cleaner's dashboard.
+// It handles UI rendering, user interactions, and delegates business logic to controllers.
 
-const CleanerPage: React.FC = () => {
-  const [userId, setUserId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<
-    "profile" | "Work Completed" | "portfolio" | "availability" | "bookings"
-  >("profile");
-  const [jobs, setJobs] = useState<History[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [portfolioImages, setPortfolioImages] = useState<PortfolioImage[]>([]);
-  const [userData, setUserData] = useState<any>(null);
-  const [workCompletedSortOrder, setWorkCompletedSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [bookingsSortOrder, setBookingsSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [serviceFilter, setServiceFilter] = useState<string>("");
-  const [dateRange, setDateRange] = useState<{
-    start: string;
-    end: string;
-  }>({
-    start: "",
-    end: "",
-  });
-  const [isEditing, setIsEditing] = useState(false);
-  const [bioDraft, setBioDraft] = useState(userData?.bio || '');
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [currentAvailability, setCurrentAvailability] = useState<any[]>([]);
- const capitalizeService = (service: string): string => {
-  return service.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-};
+// --- Core React Imports ---
+import React, { useEffect, useState, useCallback } from "react";
+
+// --- Controller Imports ---
+import { 
+    CleanerDashboardController, 
+    type PortfolioImage, 
+    type JobHistoryItem, 
+    type AvailabilityRecord 
+} from '../controllers/CleanerDashboardController'; 
+import { handleLogout } from "../controllers/logoutController"; 
+import { PortfolioController } from "../controllers/portfolioController"; 
+
+// --- Type Imports from other Controllers ---
+import type { User } from '../controllers/viewUserProfileController'; 
+
+
+// --- Constants ---
 const STANDARD_SERVICES = [
-  "Deep Cleaning",
-  "General Cleaning",
-  "Kitchen Cleaning",
-  "Post-Renovation",
-  "Window Cleaning",
-  "Carpet Cleaning",
-  "Office Cleaning",
-  "Commercial Cleaning",
+  "Deep Cleaning", "General Cleaning", "Kitchen Cleaning", "Post-Renovation",
+  "Window Cleaning", "Carpet Cleaning", "Office Cleaning", "Commercial Cleaning",
   "Floor Maintenance"
 ];
 
-const [availableServices, setAvailableServices] = useState<string[]>(STANDARD_SERVICES);
-const [shortlistCount, setShortlistCount] = useState<number | null>(null);
-const [bookings, setBookings] = useState<History[]>([]);
-const [completedJobs, setCompletedJobs] = useState<History[]>([]);
-const [completedJobCount, setCompletedJobCount] = useState<number>(0);
-const fetchCompletedJobCount = async () => {
-  if (!userId) return;
-  try {
-    const { count, error } = await supabase
-      .from('jobs')
-      .select('*', { count: 'exact', head: true })
-      .eq('cleaner_id', userId)
-      .eq('status', 'Completed');
+// --- Component Definition ---
+const CleanerPage: React.FC = () => {
+  const [userId, setUserId] = useState<string>("");
+  const [controller, setController] = useState<CleanerDashboardController | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "Work Completed" | "portfolio" | "availability" | "bookings"
+  >("profile");
 
-    if (error) throw error;
-    setCompletedJobCount(count || 0);
-  } catch (err) {
-    console.error("Failed to fetch completed job count:", err);
-    setCompletedJobCount(0);
-  }
-};
+  const [userData, setUserData] = useState<User | null>(null);
+  const [shortlistCount, setShortlistCount] = useState<number | null>(null);
+  const [completedJobCount, setCompletedJobCount] = useState<number>(0);
+  const [portfolioImagesData, setPortfolioImagesData] = useState<PortfolioImage[]>([]);
+  const [currentAvailabilityData, setCurrentAvailabilityData] = useState<AvailabilityRecord[]>([]);
+  const [jobsForDisplay, setJobsForDisplay] = useState<JobHistoryItem[]>([]);
 
+  const [loading, setLoading] = useState(true); 
+  const [error, setError] = useState<string | null>(null);
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [bioDraft, setBioDraft] = useState('');
 
+  const [selectedPortfolioFile, setSelectedPortfolioFile] = useState<File | null>(null);
+  const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
 
-  // Fetch the data when the active tab changes
+  const [selectedServicesForAvail, setSelectedServicesForAvail] = useState<string[]>([]);
+  const [selectedDateForAvail, setSelectedDateForAvail] = useState<string>("");
+
+  const [workCompletedSortOrder, setWorkCompletedSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [bookingsSortOrder, setBookingsSortOrder] = useState<'asc' | 'desc'>('asc');
+
   useEffect(() => {
-    const userId = localStorage.getItem("userId") || "";
-    setUserId(userId);
+    const id = localStorage.getItem("userId");
+    if (id) {
+      setUserId(id);
+      setController(new CleanerDashboardController(id));
+    } else {
+      setError("User ID not found. Please log in to access this page.");
+      setLoading(false);
+    }
+  }, []); 
 
-    if (!userId) return;
+  const loadDataForCurrentTab = useCallback(async () => {
+    if (!controller || !userId) { 
+        if (!controller && !error) setLoading(true); // Keep loading if controller is not ready and no critical error
+        return;
+    }
 
-    const loadAll = async () => {
-      try {
-        setLoading(true);
-
-        const userProfileService = new UserProfileService(userId);
-        const jobService = new JobService(userId);
-
-        const [userData, services, portfolioImages] = await Promise.all([
-          userProfileService.fetchUserData(),
-          jobService.fetchAvailableServices(),
-          PortfolioController.fetchImages(userId)
-        ]);
-
-        setUserData(userData);
-        setBioDraft(userData.bio || '');
-        setAvailableServices(services);
-        setPortfolioImages(portfolioImages);
-
-        if (activeTab === "Work Completed") {
-          const jobs = await jobService.fetchCompletedJobs(workCompletedSortOrder, serviceFilter, dateRange);
-          setJobs(jobs);
-        } else if (activeTab === "bookings") {
-          const bookings = await jobService.fetchBookings(bookingsSortOrder);
-          setJobs(bookings);
-        } else if (activeTab === "availability") {
-          await fetchCurrentAvailability();
-        }
-
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load data");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAll();
-  }, [activeTab, workCompletedSortOrder, bookingsSortOrder]);
-
-  const fetchCurrentAvailability = async () => {
-    if (!userId) return;
+    setLoading(true);
+    setError(null); 
 
     try {
-      const { data, error } = await supabase
-        .from('availability')
-        .select('*')
-        .eq('cleaner_id', userId)
-        .order('date', { ascending: true });
+      switch (activeTab) {
+        case "profile":
+          const profileData = await controller.getInitialProfileData();
+          setUserData(profileData.userData);
+          setBioDraft(profileData.userData?.bio || '');
+          setShortlistCount(profileData.shortlistCount);
+          setCompletedJobCount(profileData.completedJobCount);
+          // Fetch portfolio images for the profile preview
+          const imagesForProfile = await PortfolioController.fetchImages(userId);
+          setPortfolioImagesData(imagesForProfile);
+          break;
+        case "Work Completed":
+          const completedJobs = await controller.getWorkHistory(workCompletedSortOrder);
+          setJobsForDisplay(completedJobs);
+          break;
+        case "bookings":
+          const currentBookings = await controller.getBookings(bookingsSortOrder);
+          setJobsForDisplay(currentBookings);
+          break;
+        case "availability":
+          const availability = await controller.getCurrentAvailability();
+          setCurrentAvailabilityData(availability);
+          break;
+        case "portfolio":
+          const images = await PortfolioController.fetchImages(userId);
+          setPortfolioImagesData(images);
+          break;
+        default:
+          console.warn("Unknown tab selected:", activeTab);
+      }
+    } catch (err: any) {
+      console.error(`CleanerPage: Error loading data for tab '${activeTab}':`, err);
+      setError(err.message || "An unexpected error occurred while loading data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, controller, userId, workCompletedSortOrder, bookingsSortOrder]); 
 
-      if (error) throw error;
-      
-      setCurrentAvailability(data || []);
-    } catch (err) {
-      console.error("Error fetching availability:", err);
-      setError("Failed to load availability");
+  useEffect(() => {
+    if (controller && userId) { 
+      loadDataForCurrentTab();
+    }
+  }, [controller, userId, loadDataForCurrentTab]); 
+
+
+  const handleSaveBio = async () => {
+    if (!controller || !userData) {
+      alert("User data or controller not available.");
+      return;
+    }
+    setLoading(true); 
+    try {
+      const updatedUser = await controller.updateUserBio(bioDraft);
+      setUserData(updatedUser); 
+      setBioDraft(updatedUser?.bio || '');
+      setIsEditingBio(false);
+      alert("Bio updated successfully!");
+    } catch (err: any) {
+      setError(err.message || "Failed to update bio.");
+      alert(`Error: ${err.message || "Failed to update bio."}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePortfolioFileChange = (event: React.ChangeEvent<HTMLInputElement>) => { 
+    setSelectedPortfolioFile(event.target.files?.[0] || null);
+  };
+
+  const handlePortfolioUpload = async () => {
+    if (!selectedPortfolioFile || !userId) {
+      alert("Please select a file and ensure you are logged in.");
+      return;
+    }
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(selectedPortfolioFile.type)) {
+      alert("Invalid file type. Please select an image (JPEG, PNG, GIF)."); return;
+    }
+    const maxSize = 5 * 1024 * 1024; 
+    if (selectedPortfolioFile.size > maxSize) {
+      alert("File is too large. Maximum size is 5MB."); return;
+    }
+
+    setIsUploadingPortfolio(true);
+    setError(null);
+    try {
+      const uploadedImage = await PortfolioController.uploadImage(userId, selectedPortfolioFile);
+      setPortfolioImagesData((prevImages) => [...prevImages, uploadedImage]);
+      alert("Image uploaded successfully!");
+      setSelectedPortfolioFile(null); 
+    } catch (err: any) {
+      setError(err.message || "Portfolio image upload failed.");
+      alert(`Error: ${err.message || "Portfolio image upload failed."}`);
+    } finally {
+      setIsUploadingPortfolio(false);
+    }
+  };
+
+  const handleDeletePortfolioImage = async (image: PortfolioImage) => {
+    if (!userId || !image.id) {
+        alert("Cannot delete image: User or Image ID missing.");
+        return;
+    }
+    if (!window.confirm("Are you sure you want to delete this portfolio image?")) return;
+
+    setLoading(true); 
+    setError(null);
+    try {
+      await PortfolioController.deleteImage(userId, image.id); 
+      setPortfolioImagesData((prevImages) => prevImages.filter((img) => img.id !== image.id));
+      alert("Image deleted successfully!");
+    } catch (err: any) {
+      setError(err.message || "Failed to delete portfolio image.");
+      alert(`Error: ${err.message || "Failed to delete portfolio image."}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleServiceToggleForAvailability = (service: string) => {
+    setSelectedServicesForAvail(prev =>
+      prev.includes(service) ? prev.filter(s => s !== service) : [...prev, service]
+    );
+  };
+
+  const handleDateChangeForAvailability = (e: React.ChangeEvent<HTMLInputElement>) => { 
+    setSelectedDateForAvail(e.target.value);
+  };
+
+  const handleSaveAvailability = async () => {
+    if (!controller) return;
+    if (selectedServicesForAvail.length === 0 || !selectedDateForAvail) {
+        alert("Please select at least one service and a date for availability.");
+        return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await controller.saveAvailability(selectedDateForAvail, selectedServicesForAvail);
+      alert("Availability saved successfully!");
+      const updatedAvailability = await controller.getCurrentAvailability();
+      setCurrentAvailabilityData(updatedAvailability);
+      setSelectedDateForAvail("");
+      setSelectedServicesForAvail([]);
+    } catch (err: any) {
+      setError(err.message || "Failed to save availability.");
+      alert(`Error: ${err.message || "Failed to save availability."}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAvailability = async (availabilityId: string) => {
+    if (!controller) return;
+    if (!window.confirm("Are you sure you want to remove this availability slot? This action cannot be undone.")) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      await controller.deleteAvailability(availabilityId);
+      const updatedAvailability = await controller.getCurrentAvailability();
+      setCurrentAvailabilityData(updatedAvailability);
+      alert("Availability slot removed.");
+    } catch (err: any) {
+      setError(err.message || "Failed to remove availability slot.");
+      alert(`Error: ${err.message || "Failed to remove availability slot."}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateJobStatus = async (jobId: string, newStatus: string) => {
+    if (!controller) return;
+    if (newStatus === 'Cancelled' && !window.confirm('Are you sure you want to cancel this job? This should only be done for emergencies.')) {
+        return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await controller.updateJobStatus(jobId, newStatus);
+      alert(`Job status successfully updated to "${newStatus}".`);
+      await loadDataForCurrentTab(); 
+    } catch (err: any) {
+      setError(err.message || "Failed to update job status.");
+      alert(`Error: ${err.message || "Failed to update job status."}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReportJob = async (jobId: string) => {
+    if (!controller) return;
+    const reason = prompt('Please describe the issue with this job or client:');
+    if (reason && reason.trim() !== "") { 
+        setLoading(true);
+        setError(null);
+        try {
+            await controller.reportProblemOnJob(jobId, reason);
+            alert('Your report has been submitted. Admin will review it shortly.');
+        } catch (err: any) {
+            setError(err.message || 'Failed to submit report. Please try again.');
+            alert(`Error: ${err.message || 'Failed to submit report. Please try again.'}`);
+        } finally {
+            setLoading(false);
+        }
+    } else if (reason !== null) { 
+        alert("Please provide a reason for the report.");
     }
   };
   
-
-  const handleServiceToggle = (service: string) => {
-    setSelectedServices(prev => 
-      prev.includes(service) 
-        ? prev.filter(s => s !== service) 
-        : [...prev, service]
-    );
+  const capitalizeService = (service: string): string => {
+    if (!service) return "";
+    return service.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
   };
-
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedDate(e.target.value);
-  };
-
- const saveAvailability = async () => {
-  if (!userId || selectedServices.length === 0 || !selectedDate) {
-    alert("Please select at least one service and a date");
-    return;
-  }try {
-    // Validate services
-    const validServices = selectedServices.filter(service =>
-      STANDARD_SERVICES.includes(service)
-    );
-
-    if (validServices.length === 0) {
-      alert("Please select valid services");
-      return;
-    }
-
-    const { error } = await supabase
-      .from('availability')
-      .insert(
-        validServices.map(service => ({
-          cleaner_id: userId,
-          service,
-          date: selectedDate
-        }))
-      );
-
-    if (error) throw error;
-
-    alert("Availability saved successfully!");
-    fetchCurrentAvailability();
-    setSelectedDate("");
-    setSelectedServices([]);
-  } catch (err) {
-    console.error("Error saving availability:", err);
-    alert("Failed to save availability");
-  }
-};
-  const deleteAvailability = async (id: string) => {
-    if (!userId) return;
-
-    try {
-      const { error } = await supabase
-        .from('availability')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      fetchCurrentAvailability();
-    } catch (err) {
-      console.error("Error deleting availability:", err);
-      alert("Failed to delete availability");
-    }
-  };
-//Fetch homeowner view cleaner profile
-  const fetchShortlistCount = async () => {
-  try {
-    const count = await new UserProfileService(userId).getShortlistCount();
-    setShortlistCount(count);
-  } catch (err) {
-    console.error("Failed to fetch shortlist count:", err);
-    setShortlistCount(null);
-  }
-};
-const fetchCompletedJobs = async () => {
-  setLoading(true);
-  setError(null);
-
-  try {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select(`
-        id,
-        service,
-        location,
-        date,
-        status,
-        homeowner_id,
-        homeowner:homeowner_id (name)
-      `)
-      .eq('cleaner_id', userId)
-      .eq('status', 'Completed')
-      .returns<Array<{
-        id: string;
-        service: string;
-        location: string;
-        date: string;
-        status: string;
-        homeowner_id?: string;
-        homeowner?: { name: string };
-      }>>();
-
-    if (error) throw error;
-
-    const transformedData: History[] = data?.map(job => ({
-      ...job,
-      customer_name: job.homeowner?.name || 'Unknown'
-    })) || [];
-
-    setJobs(transformedData);
-  } catch (err) {
-    setError("Failed to fetch completed jobs");
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
-//save bio
-  const handleSaveBio = async () => {
-  if (!userId) return;
-
-  try {
-    setLoading(true);
-    const { error } = await supabase
-      .from('users')
-      .update({ bio: bioDraft })
-      .eq('id', userId);
-
-    if (error) throw error;
-
-    // Update local state
-    setUserData((prev: User | null) => ({ ...prev!, bio: bioDraft }));
-    setIsEditing(false);
-  } catch (err) {
-    console.error("Error updating bio:", err);
-    setError("Failed to update bio");
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Fetch bookings for 'bookings' tab
-const fetchBookings = async () => {
-  setLoading(true);
-  setError(null);
-
-  try {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select(`
-        id,
-        service,
-        location,
-        date,
-        status,
-        homeowner_id,
-        homeowner:homeowner_id (name)
-      `)
-      .eq('cleaner_id', userId)
-      .in('status', ['Pending', 'Approved', 'Rejected'])
-      .order('date', { ascending: bookingsSortOrder === 'asc' });
-
-    if (error) throw error;
-
-    // Transform data to include customer_name
-    const transformedData = data?.map((job: any) => ({
-  ...job,
-  customer_name: job.homeowner?.name || 'Unknown'
-})) as History[] || [];
-
-    setJobs(transformedData);
-  } catch (err) {
-    setError("Failed to fetch bookings");
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Function to get the color based on job status
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "pending":
-        return "text-amber-500";
-      case "approved":
-        return "text-green-500";
-      case "rejected":
-        return "text-red-500";
-      case "completed":
-        return "text-blue-500";
-      default:
-        return "text-gray-500";
-    }
-  };
-
-  // Handle file selection for image upload
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] || null;
-    setSelectedFile(file);
-  };
-
-  // Handle file upload to portfolio
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      alert("Please select a file to upload.");
-      return;
-    }
-
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
-    if (!allowedTypes.includes(selectedFile.type)) {
-      alert("Invalid file type. Please select an image file.");
-      return;
-    }
-
-    const maxSize = 5 * 1024 * 1024;
-    if (selectedFile.size > maxSize) {
-      alert("File size is too large. Please select a file smaller than 5MB.");
-      return;
-    }
-
-    setUploading(true);
-
-    if (!userId) {
-      alert("User not authenticated");
-      setUploading(false);
-      return;
-    }
-
-    try {
-      const uploadedImage = await PortfolioController.uploadImage(
-        userId,
-        selectedFile
-      );
-      setPortfolioImages((prevImages) => [...prevImages, uploadedImage]);
-      alert("Upload successful!");
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Upload failed due to an unexpected error.");
-    }
-
-    setUploading(false);
-    setSelectedFile(null);
-  };
-
-  // Handle image deletion from portfolio
-  const handleDeleteImage = async (image: PortfolioImage) => {
-    if (!userId) {
-      alert("User not authenticated");
-      return;
-    }
-
-    try {
-      await PortfolioController.deleteImage(userId, image.id);
-      setPortfolioImages((prevImages) =>
-        prevImages.filter((img) => img.id !== image.id)
-      );
-      alert("Image deleted successfully!");
-    } catch (err) {
-      console.error("Delete error:", err);
-      alert("An error occurred while deleting the image.");
-    }
-  };
-
-  // Fetch portfolio images
-  const fetchPortfolioImages = async () => {
-    setLoading(true);
-    setError(null);
-
-    if (!userId) {
-      setError("Failed to get authenticated user");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const images = await PortfolioController.fetchImages(userId);
-      setPortfolioImages(images);
-    } catch (err) {
-      setError("Failed to fetch portfolio images.");
-    }
-
-    setLoading(false);
-  };
-
-  // Update job status
- const updateJobStatus = async (jobId: string, newStatus: string): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('jobs')
-      .update({ status: newStatus })
-      .eq('id', jobId);
-
-    if (error) throw error;
-
-    // Refresh bookings with updated status and joined homeowner name
-    await fetchBookings();
-
-    // Optional: You can use a toast or snackbar instead of alert
-    alert(`Job status updated to "${newStatus}"`);
-  } catch (err) {
-    console.error("Error updating job status:", err);
-    alert("Failed to update job status.");
-  }
-};
-
-useEffect(() => {
-  if (activeTab === "profile" && userId) {
-    fetchShortlistCount();
-    fetchCompletedJobCount(); 
-  }
-}, [activeTab, userId]);
 
   const renderTabContent = () => {
+    // Initial loading state before controller is ready or if critical error during init
+    if (!controller && loading) { 
+      return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div><p className="ml-4 text-gray-300">Initializing Dashboard...</p></div>;
+    }
+    if (error && !controller) { 
+        return <div className="text-red-400 bg-red-900 bg-opacity-50 p-4 rounded-md text-center">Critical Error: {error}</div>;
+    }
+    // General loading for tab content after controller is ready
+    if (loading) {
+      return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div><p className="ml-4 text-gray-300">Loading {activeTab}...</p></div>;
+    }
+    // General error display if data loading for a tab fails (after controller is ready)
+    if (error) {
+      return <div className="text-red-400 bg-red-900 bg-opacity-50 p-4 rounded-md text-center">Error loading content: {error}</div>;
+    }
+
     switch (activeTab) {
       case "profile":
-  return (
-    <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 text-white border border-gray-700">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Cleaner Profile</h2>
-        <div className="flex items-center">
-          {shortlistCount !== null && (
-            <div className="mr-4 bg-blue-600 px-3 py-1 rounded-full flex items-center">
-              <span className="mr-1">⭐</span>
-              <span>{shortlistCount} shortlists</span>
-            </div>
-          )}
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
-          >
-            {isEditing ? 'Cancel' : 'Edit Profile'}
-          </button>
-        </div>
-      </div>
-
-  {userData && (
-    <div className="space-y-6">
-      <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-        <h3 className="text-lg font-semibold mb-3">Personal Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-gray-400">Name</p>
-            <p className="font-medium">{userData.name}</p>
-          </div>
-          <div>
-            <p className="text-gray-400">Email</p>
-            <p className="font-medium">{userData.email}</p>
-          </div>
-          <div>
-            <p className="text-gray-400">Account Type</p>
-            <p className="font-medium">{userData.account_type}</p>
-          </div>
-          <div>
-            <p className="text-gray-400">Hourly Rate</p>
-            <p className="font-medium">${userData.rates || 'Not set'}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-semibold">About Me</h3>
-          {isEditing && (
-            <button
-              onClick={handleSaveBio}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
-            >
-              Save
-            </button>
-          )}
-        </div>
-        
-        {isEditing ? (
-          <textarea
-            value={bioDraft}
-            onChange={(e) => setBioDraft(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white"
-            rows={4}
-            placeholder="Tell clients about your cleaning experience and specialties..."
-          />
-        ) : (
-          <p className="text-gray-300 whitespace-pre-line">
-            {userData.bio || 'No bio provided.'}
-          </p>
-        )}
-      </div>
-
-      <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-        <h3 className="text-lg font-semibold mb-3">Portfolio Showcase</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-          {portfolioImages.slice(0, 3).map((image) => (
-            <div key={image.id} className="relative aspect-square">
-              <img
-                src={image.publicUrl}
-                alt="Portfolio work"
-                className="w-full h-full object-cover rounded-lg"
-              />
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={() => setActiveTab("portfolio")}
-          className="text-blue-400 hover:text-blue-300 text-sm flex items-center"
-        >
-          Manage Portfolio
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  )}<div className="bg-gray-900 p-4 rounded-lg border border-gray-700 mt-6">
-        <h3 className="text-lg font-semibold mb-3">Profile Statistics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-blue-900/30 p-3 rounded-lg">
-            <p className="text-gray-400">Times Shortlisted</p>
-            <p className="text-2xl font-bold">
-              {shortlistCount !== null ? shortlistCount : "Data unavailable"}
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              Number of users who saved your profile
-            </p>
-          </div>
-          <div className="bg-green-900/30 p-3 rounded-lg">
-            <p className="text-gray-400">Completed Jobs</p>
-             <p className="text-2xl font-bold">{completedJobCount}</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Total jobs successfully completed
-            </p>
-          </div>
-        </div>
-      </div>
-</div>
-        );
-
-    case "Work Completed":
-  return (
-    <div className="max-w-6xl mx-auto text-white">
-      {/* Filter Controls */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-black mr-2">Sort by:</span>
-          <select
-            className="bg-gray-800 text-white border border-gray-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onChange={(e) => {
-              if (e.target.value === 'date-asc' || e.target.value === 'date-desc') {
-                setWorkCompletedSortOrder(e.target.value === 'date-asc' ? 'asc' : 'desc');
-                fetchCompletedJobs();
-              } else if (e.target.value === 'service-asc' || e.target.value === 'service-desc') {
-                setJobs(prevJobs => [...prevJobs].sort((a, b) => {
-                  const comparison = a.service.localeCompare(b.service);
-                  return e.target.value === 'service-asc' ? comparison : -comparison;
-                }));
-              }
-            }}
-          >
-            <option value="date-desc">Newest First ▼</option>
-            <option value="date-asc">Oldest First ▲</option>
-            <option value="service-asc">Service A-Z</option>
-            <option value="service-desc">Service Z-A</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Job List */}
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      ) : error ? (
-        <p className="text-red-400">{error}</p>
-      ) : jobs.length === 0 ? (
-        <div className="bg-gray-800 p-8 rounded-lg text-center border border-gray-700">
-          <p className="text-gray-400">No completed jobs found.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {jobs.map((job) => (
-            <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold text-lg">
-                    {job.service?.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                  </p>
-                  <p className="text-gray-300">{job.location}</p>
-                  <p className="text-sm text-gray-400">
-                    {new Date(job.date).toLocaleString()}
-                  </p>
-                  <p className="text-sm text-gray-300 mt-1">
-                    Customer: {job.customer_name || 'Unknown'}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      job.status === 'Pending'
-                        ? 'bg-amber-900 text-amber-300'
-                        : job.status === 'Approved'
-                        ? 'bg-green-900 text-green-300'
-                        : job.status === 'Rejected'
-                        ? 'bg-red-900 text-red-300'
-                        : job.status === 'Cancelled'
-                        ? 'bg-gray-700 text-gray-300'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    {job.status}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-3 flex space-x-2">
-                {job.status === 'Pending' && (
-                  <>
-                    <button
-                      onClick={() => updateJobStatus(job.id, 'Approved')}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => updateJobStatus(job.id, 'Rejected')}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                    >
-                      Reject
-                    </button>
-                  </>
+        if (!userData) return <p className="text-gray-400 text-center py-8">Profile data not available. Try refreshing or logging in again.</p>;
+        return (
+          <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 text-white border border-gray-700">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">Cleaner Profile</h2>
+              <div className="flex items-center">
+                {shortlistCount !== null && (
+                  <div className="mr-4 bg-blue-600 px-3 py-1 rounded-full flex items-center text-sm">
+                    <span className="mr-1">⭐</span>
+                    <span>{shortlistCount} shortlists</span>
+                  </div>
                 )}
-                {job.status === 'Approved' && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to cancel this job? Please only cancel in case of emergencies.')) {
-                        updateJobStatus(job.id, 'Cancelled');
-                      }
-                    }}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
-                    title="Cancel Job"
-                  >
-                    <svg 
-                      xmlns="http://www.w3.org/2000/svg" 
-                      className="h-4 w-4 mr-1" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" 
-                      />
-                    </svg>
-                    Cancel
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-3 flex space-x-2">
                 <button
-                  onClick={async () => {
-                    const reason = prompt('Please describe the issue with this completed job:');
-                    if (reason) {
-                      try {
-                        await new JobService(userId).reportJob(job.id, reason);
-                        alert('Report submitted successfully. Admin will review your report.');
-                      } catch (error) {
-                        alert('Failed to submit report. Please try again.');
-                      }
-                    }
+                  onClick={() => {
+                    setIsEditingBio(!isEditingBio);
+                    if (!isEditingBio && userData) setBioDraft(userData.bio || ''); 
                   }}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
-                  title="Report Completed Job"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors text-sm"
                 >
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    className="h-4 w-4 mr-1" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
-                    />
-                  </svg>
-                  Report
+                  {isEditingBio ? 'Cancel Edit' : 'Edit Profile'}
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
-    case "portfolio":
-  return (
-    <div className="max-w-6xl mx-auto text-white">
-      
-      
-      {/* Upload Card */}
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-6 border border-gray-700">
-        <div className="flex items-center mb-4">
-          <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer mr-2 inline-block transition-colors">
-            Choose File
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
-          <button
-            onClick={handleUpload}
-            disabled={uploading || !selectedFile}
-            className={`${uploading ? 'bg-blue-800' : 'bg-blue-600 hover:bg-blue-700'} text-white font-medium px-4 py-2 rounded transition-all`}
-          >
-            {uploading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Uploading...
-              </span>
-            ) : 'Upload'}
-          </button>
-          {selectedFile && (
-            <span className="ml-2 text-sm text-gray-300 truncate max-w-xs">
-              {selectedFile.name}
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-gray-400">
-          Upload images of your previous work to showcase your skills.
-        </p>
-      </div>
-
-      {/* Image Grid */}
-      {portfolioImages.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {portfolioImages.map((image) => (
-            <div key={image.id} className="relative group rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-all">
-              <img
-                src={image.publicUrl}
-                alt={`Portfolio work`}
-                className="w-full h-48 object-cover"
-              />
-              <button
-                onClick={() => handleDeleteImage(image)}
-                className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                title="Delete image"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-gray-800 p-8 rounded-lg text-center border border-gray-700">
-          <p className="text-gray-400">No portfolio images yet. Upload some to showcase your work!</p>
-        </div>
-      )}
-    </div>
-  );
-
-   case "availability":
-  return (
-    <div className="max-w-md mx-auto bg-gray-800 rounded-xl shadow-lg overflow-hidden md:max-w-2xl p-6 text-white border border-gray-700">
-      <h2 className="text-2xl font-bold mb-4">Set Your Availability</h2>
-      <p className="text-gray-300 mb-6">
-        Select the services you provide and the dates you're available to work.
-      </p>
-      
-      <div className="space-y-6">
-        {/* Service Selection */}
-        <div>
-          <h3 className="text-lg font-semibold mb-2">Services You Provide</h3>
-          <div className="grid grid-cols-2 gap-2">
-            {STANDARD_SERVICES.map(service => (
-              <div key={service} className="flex items-center">
-                <input
-                  type="checkbox"
-                  id={`service-${service}`}
-                  className="mr-2"
-                  checked={selectedServices.includes(service)}
-                  onChange={() => handleServiceToggle(service)}
-                />
-                <label htmlFor={`service-${service}`}>
-                  {service}
-                </label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-              {/* Date Selection */}
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Available Dates</h3>
-                <div className="flex flex-col space-y-4">
-                  <div>
-                    <label htmlFor="avail-date" className="block text-sm font-medium mb-1">
-                      Select Date
-                    </label>
-                    <input
-                      type="date"
-                      id="avail-date"
-                      className="w-full bg-gray-700 border border-gray-600 rounded p-2"
-                      min={new Date().toISOString().split('T')[0]}
-                      value={selectedDate}
-                      onChange={handleDateChange}
-                    />
-                  </div>
-                  
-                  <button
-                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
-                    onClick={saveAvailability}
-                    disabled={loading}
-                  >
-                    {loading ? 'Saving...' : 'Add Availability'}
-                  </button>
+            <div className="space-y-6">
+              <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                <h3 className="text-lg font-semibold mb-3">Personal Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div><p className="text-gray-400">Name</p><p className="font-medium">{userData.name}</p></div>
+                  <div><p className="text-gray-400">Email</p><p className="font-medium">{userData.email}</p></div>
+                  <div><p className="text-gray-400">Account Type</p><p className="font-medium">{userData.account_type}</p></div>
+                  <div><p className="text-gray-400">Hourly Rate</p><p className="font-medium">${userData.rates || 'Not set'}</p></div>
                 </div>
               </div>
-
-              {/* Current Availability List */}
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Your Current Availability</h3>
-                <div className="bg-gray-900 rounded-lg p-4">
-                  {loading ? (
-                    <div className="flex justify-center py-4">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    </div>
-                  ) : currentAvailability.length === 0 ? (
-                    <p className="text-gray-400 text-center">No availability set yet</p>
-                  ) : (
-                   <div className="space-y-2">
-                       {currentAvailability.map(avail => (
-                   <div key={avail.id} className="flex justify-between items-center p-2 bg-gray-800 rounded">
-                   <div>
-                    <span className="font-medium">
-                         {capitalizeService(avail.service)}
-                    </span>
-                    <span className="text-gray-400 ml-2">
-                     {new Date(avail.date).toLocaleDateString()}
-                     </span>
-                    </div>
-                          <button
-                            onClick={() => deleteAvailability(avail.id)}
-                            className="text-red-400 hover:text-red-300"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+              <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-lg font-semibold">About Me</h3>
+                  {isEditingBio && (
+                    <button onClick={handleSaveBio} disabled={loading && isEditingBio} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm disabled:opacity-50">
+                      {loading && isEditingBio ? "Saving..." : "Save Bio"}
+                    </button>
                   )}
+                </div>
+                {isEditingBio ? (
+                  <textarea value={bioDraft} onChange={(e) => setBioDraft(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-3 text-white" rows={4} placeholder="Tell clients about your cleaning experience and specialties..."/>
+                ) : (
+                  <p className="text-gray-300 whitespace-pre-line min-h-[80px]">{userData.bio || 'No bio provided. Click "Edit Profile" to add one.'}</p>
+                )}
+              </div>
+              <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                <h3 className="text-lg font-semibold mb-3">Portfolio Showcase (First 3)</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                  {portfolioImagesData.length > 0 ? portfolioImagesData.slice(0, 3).map((image) => (
+                    <div key={image.id} className="relative aspect-square">
+                      <img src={image.publicUrl} alt="Portfolio work" className="w-full h-full object-cover rounded-lg" />
+                    </div>
+                  )) : <p className="text-gray-400 col-span-full text-sm">No portfolio images uploaded yet.</p>}
+                </div>
+                <button onClick={() => setActiveTab("portfolio")} className="text-blue-400 hover:text-blue-300 text-sm flex items-center">
+                  Manage Full Portfolio <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
+              <div className="bg-gray-900 p-4 rounded-lg border border-gray-700 mt-6">
+                <h3 className="text-lg font-semibold mb-3">Profile Statistics</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-900/30 p-3 rounded-lg">
+                    <p className="text-gray-400">Times Shortlisted</p>
+                    <p className="text-2xl font-bold">{shortlistCount !== null ? shortlistCount : "N/A"}</p>
+                  </div>
+                  <div className="bg-green-900/30 p-3 rounded-lg">
+                    <p className="text-gray-400">Completed Jobs</p>
+                    <p className="text-2xl font-bold">{completedJobCount}</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         );
 
-     case "bookings":
-  return (
-  <div className="max-w-6xl mx-auto text-white">
-    {/* Filter Controls */}
-    <div className="flex justify-between items-center mb-6">
-      <div className="flex items-center space-x-4">
-        <span className="text-sm text-black mr-2">Sort by:</span>
-        <select
-          className="bg-gray-800 text-white border border-gray-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          onChange={(e) => {
-            if (e.target.value === 'date-asc' || e.target.value === 'date-desc') {
-              setBookingsSortOrder(e.target.value === 'date-asc' ? 'asc' : 'desc');
-              fetchBookings();
-            } else if (e.target.value === 'service-asc' || e.target.value === 'service-desc') {
-              setJobs(prevJobs => [...prevJobs].sort((a, b) => {
-                const comparison = a.service.localeCompare(b.service);
-                return e.target.value === 'service-asc' ? comparison : -comparison;
-              }));
-            }
-          }}
-        >
-          <option value="date-desc">Newest First ▼</option>
-          <option value="date-asc">Oldest First ▲</option>
-          <option value="service-asc">Service A-Z</option>
-          <option value="service-desc">Service Z-A</option>
-        </select>
-      </div>
-    </div>
-
-    {loading ? (
-      <div className="flex justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    ) : error ? (
-      <p className="text-red-400">{error}</p>
-    ) : jobs.length === 0 ? (
-      <div className="bg-gray-800 p-8 rounded-lg text-center border border-gray-700">
-        <p className="text-gray-400">No bookings found.</p>
-      </div>
-    ) : (
-      <div className="space-y-4">
-        {jobs.map((job) => (
-          <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="font-semibold text-lg">
-                  {job.service?.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                </p>
-                <p className="text-gray-300">{job.location}</p>
-                <p className="text-sm text-gray-400">
-                  {new Date(job.date).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-300 mt-1">
-                  Customer: {job.customer_name || 'Unknown'}
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    job.status === 'Pending'
-                      ? 'bg-amber-900 text-amber-300'
-                      : job.status === 'Approved'
-                      ? 'bg-green-900 text-green-300'
-                      : job.status === 'Rejected'
-                      ? 'bg-red-900 text-red-300'
-                      : job.status === 'Cancelled'
-                      ? 'bg-gray-700 text-gray-300'
-                      : 'bg-gray-700 text-gray-300'
-                  }`}
+      case "Work Completed":
+      case "bookings":
+        const listTitleJobs = activeTab === "Work Completed" ? "Completed Jobs" : "Your Bookings";
+        if (jobsForDisplay.length === 0) return <p className="text-gray-400 text-center py-8">No {activeTab === "Work Completed" ? "completed jobs" : "bookings"} found.</p>;
+        return (
+          // JSX for Work Completed and Bookings (ensure it uses jobsForDisplay)
+          <div className="max-w-6xl mx-auto text-white">
+            <h2 className="text-2xl font-bold mb-6">{listTitleJobs}</h2>
+            <div className="flex justify-start items-center mb-6">
+                <span className="text-sm text-gray-300 mr-2">Sort by Date:</span>
+                <select
+                    className="bg-gray-800 text-white border border-gray-600 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={activeTab === "Work Completed" ? workCompletedSortOrder : bookingsSortOrder}
+                    onChange={(e) => {
+                        const newSortOrder = e.target.value as 'asc' | 'desc';
+                        if (activeTab === "Work Completed") setWorkCompletedSortOrder(newSortOrder);
+                        else setBookingsSortOrder(newSortOrder);
+                    }}
                 >
-                  {job.status}
-                </span>
+                    <option value="desc">Newest First</option>
+                    <option value="asc">Oldest First</option>
+                </select>
+            </div>
+            <div className="space-y-4">
+              {jobsForDisplay.map((job) => (
+                <div key={job.id} className="p-4 border border-gray-700 rounded-lg shadow-sm bg-gray-800 hover:bg-gray-750 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-lg">{capitalizeService(job.service)}</p>
+                      <p className="text-gray-300">{job.location}</p>
+                      <p className="text-sm text-gray-400">{new Date(job.date).toLocaleString()}</p>
+                      <p className="text-sm text-gray-300 mt-1">Customer: {job.customer_name || 'Unknown'}</p>
+                    </div>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${ job.status === 'Pending' ? 'bg-amber-900 text-amber-300' : job.status === 'Approved' ? 'bg-green-900 text-green-300' : job.status === 'Rejected' ? 'bg-red-900 text-red-300' : job.status === 'Cancelled' ? 'bg-gray-700 text-gray-300' : 'bg-blue-900 text-blue-300' }`}>
+                      {job.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex space-x-2">
+                    {job.status === 'Pending' && (
+                      <>
+                        <button onClick={() => handleUpdateJobStatus(job.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">Approve</button>
+                        <button onClick={() => handleUpdateJobStatus(job.id, 'Rejected')} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Reject</button>
+                      </>
+                    )}
+                    {job.status === 'Approved' && (
+                      <>
+                        <button onClick={() => handleUpdateJobStatus(job.id, 'Cancelled')} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm">Cancel Job</button>
+                        <button onClick={() => handleReportJob(job.id)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm">Report Client</button>
+                      </>
+                    )}
+                     {job.status === 'Completed' && activeTab === "Work Completed" && (
+                        <button onClick={() => handleReportJob(job.id)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm">Report Issue</button>
+                     )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case "portfolio":
+        // This is the crucial part for the upload UI
+        if (!userId) { 
+            return <p className="text-orange-400 text-center py-8">User ID not available. Cannot manage portfolio.</p>;
+        }
+        return (
+          <div className="max-w-6xl mx-auto text-white">
+            <h2 className="text-2xl font-bold mb-6">Manage Your Portfolio</h2>
+            {/* Upload Card - THIS IS THE UI THAT WAS MISSING */}
+            <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-6 border border-gray-700">
+              <div className="flex items-center mb-4">
+                <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer mr-2 inline-block transition-colors">
+                  Choose File
+                  <input type="file" accept="image/*" onChange={handlePortfolioFileChange} className="hidden" />
+                </label>
+                <button 
+                  onClick={handlePortfolioUpload} 
+                  disabled={isUploadingPortfolio || !selectedPortfolioFile} 
+                  className={`${isUploadingPortfolio ? 'bg-blue-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white font-medium px-4 py-2 rounded transition-all disabled:opacity-50`}
+                >
+                  {isUploadingPortfolio ? "Uploading..." : "Upload Image"}
+                </button>
+                {selectedPortfolioFile && <span className="ml-2 text-sm text-gray-300 truncate max-w-xs">{selectedPortfolioFile.name}</span>}
+              </div>
+              <p className="text-sm text-gray-400">Upload images of your work (max 5MB, JPG/PNG/GIF).</p>
+            </div>
+            {/* End of Upload Card */}
+
+            {/* Image Grid */}
+            {isUploadingPortfolio && <p className="text-gray-400 text-center py-4">Uploading image...</p> }
+            {!isUploadingPortfolio && portfolioImagesData.length === 0 && 
+              <p className="text-gray-400 text-center py-8">No portfolio images yet. Upload some to showcase your work!</p>
+            }
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {portfolioImagesData.map((image) => (
+                <div key={image.id} className="relative group rounded-lg overflow-hidden border border-gray-700">
+                  <img src={image.publicUrl} alt="Portfolio" className="w-full h-48 object-cover" />
+                  <button 
+                    onClick={() => handleDeletePortfolioImage(image)} 
+                    className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                    title="Delete image"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case "availability":
+        // JSX for Availability tab
+        // Ensure it uses currentAvailabilityData, handleSaveAvailability, etc.
+        return (
+          <div className="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow-lg p-6 text-white border border-gray-700">
+            <h2 className="text-2xl font-bold mb-4">Set Your Availability</h2>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Services You Can Provide on This Date</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+                  {STANDARD_SERVICES.map(service => (
+                    <div key={service} className="flex items-center">
+                      <input type="checkbox" id={`service-avail-${service}`} className="mr-2 accent-blue-500" checked={selectedServicesForAvail.includes(service)} onChange={() => handleServiceToggleForAvailability(service)} />
+                      <label htmlFor={`service-avail-${service}`} className="text-sm">{service}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label htmlFor="avail-date" className="block text-sm font-medium mb-1">Select Date</label>
+                <input type="date" id="avail-date" className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" min={new Date().toISOString().split('T')[0]} value={selectedDateForAvail} onChange={handleDateChangeForAvailability} />
+              </div>
+              <button onClick={handleSaveAvailability} disabled={loading && activeTab === "availability"} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded disabled:opacity-50">
+                {loading && activeTab === "availability" ? 'Saving...' : 'Add Availability Slot'}
+              </button>
+              <div>
+                <h3 className="text-lg font-semibold mt-6 mb-2">Your Current Availability</h3>
+                <div className="bg-gray-900 rounded-lg p-4 max-h-60 overflow-y-auto">
+                  {currentAvailabilityData.length === 0 && <p className="text-gray-400 text-center">No availability set yet.</p>}
+                  {currentAvailabilityData.map(avail => (
+                    <div key={avail.id} className="flex justify-between items-center p-2 bg-gray-800 rounded mb-2">
+                      <div>
+                        <span className="font-medium">{capitalizeService(avail.service)}</span>
+                        <span className="text-gray-400 ml-2 text-sm">{new Date(avail.date).toLocaleDateString()}</span>
+                      </div>
+                      <button onClick={() => handleDeleteAvailability(avail.id)} className="text-red-400 hover:text-red-300 text-xs">Remove</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div className="mt-3 flex space-x-2">
-              {job.status === 'Pending' && (
-                  <>
-                    <button
-                      onClick={() => updateJobStatus(job.id, 'Approved')}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => updateJobStatus(job.id, 'Rejected')}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                    >
-                      Reject
-                    </button>
-                  </>
-                )}
-                {job.status === 'Approved' && (
-                  <>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to cancel this job? Please only cancel in case of emergencies.')) {
-                          updateJobStatus(job.id, 'Cancelled');
-                        }
-                      }}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
-                      title="Cancel Job"
-                    >
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 mr-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" 
-                        />
-                      </svg>
-                      Cancel
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const reason = prompt('Please describe the issue with this client:');
-                        if (reason) {
-                          try {
-                            await new JobService(userId).reportJob(job.id, reason);
-                            alert('Report submitted successfully. Admin will review your report.');
-                          } catch (error) {
-                            alert('Failed to submit report. Please try again.');
-                          }
-                        }
-                      }}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm transition-colors flex items-center"
-                      title="Report Client"
-                    >
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 mr-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
-                        />
-                      </svg>
-                      Report
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-default:
-  return null;
-
+          </div>
+        );
+      default:
+        return <p className="text-center text-gray-400 py-8">Please select a tab to view content.</p>;
     }
   };
 
- return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      <nav className="bg-blue-600 p-4 text-white">
+  if (!userId && !controller && !error) { 
+      return <div className="min-h-screen flex justify-center items-center bg-gray-900"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div><p className="ml-4 text-xl text-gray-300">Initializing Dashboard...</p></div>;
+  }
+  if (error && !controller) { // Error during controller/userId initialization
+      return <div className="min-h-screen flex justify-center items-center bg-gray-900 text-red-400 p-6 text-xl">{error}</div>;
+  }
+  // If userId is missing after initial effect and no error was set for it (should be caught by initial useEffect)
+  if (!userId && !loading && !error) { 
+      return <div className="min-h-screen flex justify-center items-center bg-gray-900 text-orange-400 p-6 text-xl">User not authenticated. Please log in.</div>;
+  }
+
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white font-sans">
+      <nav className="bg-blue-600 p-4 text-white sticky top-0 z-50 shadow-lg">
         <div className="container mx-auto flex flex-col md:flex-row items-center justify-between">
           <h1 className="text-xl font-bold mb-4 md:mb-0">
-            {userData?.name || 'Cleaner Dashboard'}
+            {userData?.name ? `${userData.name}'s Dashboard` : 'Cleaner Dashboard'}
           </h1>
           <div className="flex flex-wrap gap-2">
-          <button
-  onClick={() => setActiveTab("profile")}
-  className={`px-3 py-2 rounded flex items-center ${activeTab === 'profile' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
->
-  Profile
-  {shortlistCount !== null && shortlistCount > 0 && (
-    <span className="ml-2 bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full">
-      {shortlistCount}
-    </span>
-  )}
-</button>
+            {(["profile", "Work Completed", "bookings", "availability", "portfolio"] as const).map(tabName => (
+                 <button
+                    key={tabName}
+                    onClick={() => setActiveTab(tabName)}
+                    className={`px-3 py-2 rounded text-sm font-medium transition-colors ${activeTab === tabName ? 'bg-blue-700 ring-2 ring-blue-300' : 'hover:bg-blue-700'}`}
+                 >
+                   {tabName.charAt(0).toUpperCase() + tabName.slice(1).replace(/([A-Z])/g, ' $1').trim()}
+                   {tabName === "profile" && shortlistCount !== null && shortlistCount > 0 && (
+                        <span className="ml-2 bg-yellow-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{shortlistCount}</span>
+                   )}
+                 </button>
+            ))}
             <button
-              onClick={() => setActiveTab("Work Completed")}
-              className={`px-3 py-2 rounded ${activeTab === 'Work Completed' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
-            >
-              Work Completed
-            </button>
-            <button
-              onClick={() => setActiveTab("portfolio")}
-              className={`px-3 py-2 rounded ${activeTab === 'portfolio' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
-            >
-              Portfolio
-            </button>
-            <button
-              onClick={() => setActiveTab("availability")}
-              className={`px-3 py-2 rounded ${activeTab === 'availability' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
-            >
-              Availability
-            </button>
-            <button
-              onClick={() => setActiveTab("bookings")}
-              className={`px-3 py-2 rounded ${activeTab === 'bookings' ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
-            >
-              Bookings
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-white"
+              onClick={handleLogout} 
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-white text-sm font-medium"
             >
               Logout
             </button>
