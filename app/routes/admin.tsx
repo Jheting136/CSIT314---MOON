@@ -1,4 +1,4 @@
-// views/AdminDashboard.tsx  (put under /routes if you’re routing with Vite/React-Router)
+//admin home page
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AdminApproveController } from '../controllers/adminApproveController';
