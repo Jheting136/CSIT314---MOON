@@ -42,6 +42,12 @@ interface FavoriteButtonProps {
   className?: string;
 }
 
+interface BookingFormData {
+  service: string;
+  date: string;
+  location: string;
+}
+
 function FavoriteButton({
   isFavorite,
   onClick,
@@ -79,6 +85,152 @@ function CleanerModal({
   onFavoriteToggle: (id: string, currentState: boolean) => void;
 }) {
   if (!isOpen || !cleaner) return null;
+
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [bookingCleaner, setBookingCleaner] = useState<CleaningService | null>(
+    null
+  );
+  const [bookingError, setBookingError] = useState<string | null>(null);
+
+  const handleBookingSubmit = async (formData: BookingFormData) => {
+    setBookingError(null);
+    try {
+      if (!bookingCleaner) return;
+
+      await listingController.createBooking(
+        bookingCleaner.id,
+        formData.service,
+        formData.location,
+        new Date(formData.date)
+      );
+
+      setIsBookingModalOpen(false);
+      setBookingCleaner(null);
+      // Show success message or redirect to bookings page
+      alert("Booking created successfully!");
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      setBookingError("Failed to create booking. Please try again.");
+    }
+  };
+
+  const handleBookNow = (cleaner: CleaningService) => {
+    setBookingCleaner(cleaner);
+    setIsBookingModalOpen(true);
+  };
+
+  const BookingModal = () => {
+    if (!isBookingModalOpen || !bookingCleaner) return null;
+
+    const [formData, setFormData] = useState<BookingFormData>({
+      service: bookingCleaner.services[0] || "",
+      date: "",
+      location: "",
+    });
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 rounded-xl max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-white">
+              Book {bookingCleaner.provider}
+            </h2>
+            <button
+              onClick={() => setIsBookingModalOpen(false)}
+              className="text-gray-400 hover:text-white"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+
+          {bookingError && (
+            <div className="mb-4 p-3 bg-red-500 bg-opacity-20 text-red-400 rounded">
+              {bookingError}
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleBookingSubmit(formData);
+            }}
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Service
+                </label>
+                <select
+                  value={formData.service}
+                  onChange={(e) =>
+                    setFormData({ ...formData, service: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  required
+                >
+                  {bookingCleaner.services.map((service) => (
+                    <option key={service} value={service}>
+                      {service}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Date
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, date: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) =>
+                    setFormData({ ...formData, location: e.target.value })
+                  }
+                  placeholder="Enter your address"
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 font-medium"
+              >
+                Confirm Booking
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -183,24 +335,15 @@ function CleanerModal({
             <div className="mt-8 flex gap-4">
               <button
                 className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 font-medium"
-                onClick={() => {
-                  /* Add booking logic */
-                }}
+                onClick={() => handleBookNow(cleaner)}
               >
                 Book Now
-              </button>
-              <button
-                className="flex-1 bg-gray-700 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors duration-300 font-medium"
-                onClick={() => {
-                  /* Add contact logic */
-                }}
-              >
-                Contact Cleaner
               </button>
             </div>
           </div>
         </div>
       </div>
+      <BookingModal />
     </div>
   );
 }
@@ -551,9 +694,6 @@ export default function HomeownerPage() {
                         ))}
                       </div>
                     </div>
-                    <button className="mt-auto w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 font-medium">
-                      Book Now
-                    </button>
                   </div>
                 </div>
               ))}

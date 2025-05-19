@@ -233,4 +233,30 @@ export class listingModel {
           );
     }
   }
+
+  static async createBooking(
+    cleanerId: string,
+    homeownerId: string,
+    service: string,
+    location: string,
+    date: Date
+  ): Promise<string> {
+    try {
+      const booking = await commonModel.insertData("jobs", {
+        cleaner_id: cleanerId,
+        homeowner_id: homeownerId,
+        service: service,
+        location: location,
+        date: date,
+        status: "pending", // Initial status
+      });
+
+      return booking.id;
+    } catch (error) {
+      console.error("[ListingModel] Error creating booking:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while creating the booking");
+    }
+  }
 }
