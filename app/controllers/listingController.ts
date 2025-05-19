@@ -32,4 +32,48 @@ export class listingController {
         : new Error("An unexpected error occurred while fetching cleaners");
     }
   }
+
+  static async saveView(cleanerId: string): Promise<void> {
+    try {
+      const viewerId = localStorage.getItem("userId");
+      if (!viewerId) {
+        throw new Error("User ID not found");
+      }
+
+      await listingModel.saveView(cleanerId, viewerId);
+    } catch (error) {
+      console.error("[ListingController] Error in saveView:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while saving view");
+    }
+  }
+
+  static async saveFavorite(
+    cleanerId: string,
+    userId: string,
+    isFavorite: boolean
+  ): Promise<void> {
+    try {
+      await listingModel.saveFavorite(cleanerId, userId, isFavorite);
+    } catch (error) {
+      console.error("[ListingController] Error in saveFavorite:", error);
+      throw error instanceof Error
+        ? error
+        : new Error(
+            "An unexpected error occurred while updating favorite status"
+          );
+    }
+  }
+
+  static async getFavorites(userId: string): Promise<string[]> {
+    try {
+      return await listingModel.getFavorites(userId);
+    } catch (error) {
+      console.error("[ListingController] Error in getFavorites:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while fetching favorites");
+    }
+  }
 }

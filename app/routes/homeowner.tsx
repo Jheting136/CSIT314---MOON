@@ -11,7 +11,6 @@ import {
   type FilteredCleanersResult,
 } from "../controllers/listingController";
 import type { CleaningService } from "../controllers/listingController";
-import { Link } from "react-router-dom";
 
 const availableServices = [
   "General Cleaning",
@@ -37,21 +36,63 @@ function goToManageAccount() {
   window.location.href = "/manageAccount";
 }
 
+interface FavoriteButtonProps {
+  isFavorite: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  className?: string;
+}
+
+function FavoriteButton({
+  isFavorite,
+  onClick,
+  className = "",
+}: FavoriteButtonProps) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation(); // Prevent card click when clicking favorite
+        onClick(e);
+      }}
+      className={`text-2xl transition-colors duration-300 ${className}`}
+    >
+      {isFavorite ? "❤️" : "🤍"}
+    </button>
+  );
+}
+
 interface ModalProps {
   cleaner: CleaningService | null;
   isOpen: boolean;
   onClose: () => void;
+  favorites: Set<string>;
+  onFavoriteToggle: (id: string, currentState: boolean) => void;
 }
 
-function CleanerModal({ cleaner, isOpen, onClose }: ModalProps) {
+function CleanerModal({
+  cleaner,
+  isOpen,
+  onClose,
+  favorites,
+  onFavoriteToggle,
+}: ModalProps & {
+  favorites: Set<string>;
+  onFavoriteToggle: (id: string, currentState: boolean) => void;
+}) {
   if (!isOpen || !cleaner) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          {/* Close button */}
-          <div className="flex justify-end">
+          {/* Close and favorite buttons */}
+          <div className="flex justify-between">
+            <FavoriteButton
+              isFavorite={favorites.has(cleaner.id)}
+              onClick={() =>
+                onFavoriteToggle(cleaner.id, favorites.has(cleaner.id))
+              }
+              className="text-3xl"
+            />
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white"
@@ -181,6 +222,38 @@ export default function HomeownerPage() {
   const [totalCleaners, setTotalCleaners] = useState(0);
   const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState<string | null>(null);
+
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  const handleFavoriteToggle = async (
+    cleanerId: string,
+    currentState: boolean
+  ) => {
+    try {
+      const userId = localStorage.getItem("userId");
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+      await listingController.saveFavorite(cleanerId, userId, !currentState);
+      setFavorites((prev) => {
+        const newFavorites = new Set(prev);
+        if (currentState) {
+          newFavorites.delete(cleanerId);
+        } else {
+          newFavorites.add(cleanerId);
+        }
+        return newFavorites;
+      });
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+    }
+  };
+
+  const handleCardClick = (listing: CleaningService) => {
+    setSelectedCleaner(listing);
+    setIsModalOpen(true);
+    listingController.saveView(listing.id);
+  };
 
   const loadCleaners = useCallback(
     async (pageToLoad: number) => {
@@ -405,12 +478,21 @@ export default function HomeownerPage() {
               {displayedCleaners.map((listing: CleaningService) => (
                 <div
                   key={listing.id}
-                  className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col cursor-pointer"
-                  onClick={() => {
-                    setSelectedCleaner(listing);
-                    setIsModalOpen(true);
-                  }}
+                  className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col cursor-pointer relative"
+                  onClick={() => handleCardClick(listing)}
                 >
+                  {/* Add favorite button to top-right corner */}
+                  <div className="absolute top-4 right-4 z-10">
+                    <FavoriteButton
+                      isFavorite={favorites.has(listing.id)}
+                      onClick={(e) =>
+                        handleFavoriteToggle(
+                          listing.id,
+                          favorites.has(listing.id)
+                        )
+                      }
+                    />
+                  </div>
                   <div className="h-56 bg-gradient-to-r from-gray-700 to-gray-800 flex items-center justify-center">
                     <div className="w-24 h-24 rounded-full bg-gray-700 shadow-md flex items-center justify-center">
                       <span className="text-gray-400 text-3xl">👤</span>
@@ -506,6 +588,8 @@ export default function HomeownerPage() {
           setIsModalOpen(false);
           setSelectedCleaner(null);
         }}
+        favorites={favorites}
+        onFavoriteToggle={handleFavoriteToggle}
       />
     </main>
   );

@@ -143,4 +143,94 @@ export class listingModel {
 
     return filters;
   }
+
+  static async saveView(cleanerId: string, viewerId: string): Promise<void> {
+    try {
+      // Direct database call using commonModel
+      await commonModel.insertData("cleaner_views", {
+        cleaner_id: cleanerId,
+        viewer_id: viewerId,
+        // viewed_at has a default of now() in the database, so no need to specify it
+      });
+    } catch (error) {
+      console.error("[ListingModel] Error saving view:", error);
+      throw error;
+    }
+  }
+
+  static async saveFavorite(
+    cleanerId: string,
+    userId: string,
+    isFavorite: boolean
+  ): Promise<void> {
+    try {
+      const favoriteExists = await commonModel.recordExists(
+        "cleaner_favorites",
+        {
+          cleaner_id: cleanerId,
+          user_id: userId,
+        }
+      );
+
+      if (isFavorite && !favoriteExists) {
+        // Add to favorites
+        await commonModel.insertData("cleaner_favorites", {
+          cleaner_id: cleanerId,
+          user_id: userId,
+          // created_at has a default of now() in the database
+        });
+      } else if (!isFavorite && favoriteExists) {
+        // Remove from favorites
+        await commonModel.deleteRecord("cleaner_favorites", {
+          cleaner_id: cleanerId,
+          user_id: userId,
+        });
+      }
+      // If already in desired state, do nothing
+    } catch (error) {
+      console.error("[ListingModel] Error updating favorite status:", error);
+      throw error instanceof Error
+        ? error
+        : new Error(
+            "An unexpected error occurred while updating favorite status"
+          );
+    }
+  }
+
+  static async getFavorites(userId: string): Promise<string[]> {
+    try {
+      const favorites = await commonModel.getRecords(
+        "cleaner_favorites",
+        "cleaner_id",
+        { user_id: userId }
+      );
+
+      // Extract cleaner_id values from the results
+      return favorites.map((favorite) => favorite.cleaner_id);
+    } catch (error) {
+      console.error("[ListingModel] Error fetching favorites:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while fetching favorites");
+    }
+  }
+
+  static async isFavorited(
+    cleanerId: string,
+    userId: string
+  ): Promise<boolean> {
+    try {
+      return await commonModel.recordExists("cleaner_favorites", {
+        cleaner_id: cleanerId,
+        user_id: userId,
+      });
+    } catch (error) {
+      console.error("[ListingModel] Error checking favorite status:", error);
+      throw error instanceof Error
+        ? error
+        : new Error(
+            "An unexpected error occurred while checking favorite status"
+          );
+    }
+  }
 }
