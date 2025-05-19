@@ -103,4 +103,26 @@ export class listingController {
         : new Error("An unexpected error occurred while creating the booking");
     }
   }
+
+  static async getJobs(userId: string): Promise<any[]> {
+    try {
+      return await listingModel.getJobs(userId);
+    } catch (error) {
+      console.error("[ListingController] Error in getJobs:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while fetching jobs");
+    }
+  }
+
+  static async markJobCompleted(jobId: string): Promise<void> {
+    try {
+      await listingModel.updateJobStatus(jobId, "completed");
+    } catch (error) {
+      console.error("[ListingController] Error in markJobCompleted:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while updating job status");
+    }
+  }
 }

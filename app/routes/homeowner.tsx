@@ -11,6 +11,7 @@ import {
   type FilteredCleanersResult,
 } from "../controllers/listingController";
 import type { CleaningService } from "../controllers/listingController";
+import { JobsTab } from "./JobsTab";
 
 const availableServices = [
   "General Cleaning",
@@ -349,6 +350,7 @@ function CleanerModal({
 }
 
 export default function HomeownerPage() {
+  const [activeTab, setActiveTab] = useState<"search" | "jobs">("search");
   const [selectedCleaner, setSelectedCleaner] =
     useState<CleaningService | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -490,235 +492,264 @@ export default function HomeownerPage() {
           Welcome, Homeowner
         </h1>
 
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-semibold text-white mb-3">
-            Find Your Perfect Cleaner
-          </h2>
-          <p className="text-gray-300 max-w-2xl mx-auto">
-            Browse our trusted network of professional cleaners.
-          </p>
+        <div className="flex justify-center mb-8">
+          <button
+            onClick={() => setActiveTab("search")}
+            className={`px-6 py-2 rounded-lg mr-4 ${
+              activeTab === "search"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+          >
+            Search Cleaners
+          </button>
+          <button
+            onClick={() => setActiveTab("jobs")}
+            className={`px-6 py-2 rounded-lg ${
+              activeTab === "jobs"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+          >
+            My Jobs
+          </button>
         </div>
-
-        {/* Search and Filters */}
-        <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-10 sticky top-4 z-40">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Search Input */}
-            <div>
-              <label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Search by Name or Service
-              </label>
-              <input
-                id="search"
-                type="text"
-                placeholder="Search..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700 placeholder-gray-400"
-              />
-            </div>
-            {/* Price Range */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Price Range ($/hr)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder="Min"
-                  value={minPrice}
-                  onChange={handleMinPriceChange}
-                  min="0"
-                  className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700 placeholder-gray-400"
-                />
-                <input
-                  type="number"
-                  placeholder="Max"
-                  value={maxPrice}
-                  onChange={handleMaxPriceChange}
-                  min="0"
-                  className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700 placeholder-gray-400"
-                />
-              </div>
-            </div>
-            {/* Rating Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Minimum Rating
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={minRating}
-                  onChange={handleRatingChange}
-                  className="w-full accent-blue-500"
-                />
-                <span className="text-sm font-medium text-gray-300 w-12 text-center">
-                  {minRating.toFixed(1)}
-                </span>
-              </div>
-            </div>
-            {/* Service Filter */}
-            <div>
-              <label
-                htmlFor="service"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Cleaning Skill
-              </label>
-              <select
-                id="service"
-                value={selectedService}
-                onChange={handleServiceChange}
-                className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700"
-              >
-                <option value="">All Skills</option>
-                {availableServices.map((serviceName) => (
-                  <option
-                    key={serviceName}
-                    value={serviceName}
-                    className="text-gray-900 bg-white"
-                  >
-                    {serviceName}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Messages and Cleaner Listings */}
-        <div className="mb-6 text-center">
-          {loading && (
-            <p className="text-gray-300 text-lg animate-pulse">
-              Loading cleaners...
-            </p>
-          )}
-          {error && (
-            <p className="text-red-400 text-lg bg-red-900 bg-opacity-50 p-3 rounded-md">
-              {error}
-            </p>
-          )}
-        </div>
-
-        {!loading && !error && totalCleaners === 0 && (
-          <p className="text-gray-400 text-center text-xl py-10">
-            No cleaners found matching your criteria or available at the moment.
-          </p>
-        )}
-
-        {!loading && !error && displayedCleaners.length > 0 && (
+        {activeTab === "search" ? (
           <>
-            <p className="text-gray-300 text-center mb-6">
-              Showing {displayedCleaners.length} of {totalCleaners} cleaners
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {displayedCleaners.map((listing: CleaningService) => (
-                <div
-                  key={listing.id}
-                  className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col cursor-pointer relative"
-                  onClick={() => handleCardClick(listing)}
-                >
-                  {/* Add favorite button to top-right corner */}
-                  <div className="absolute top-4 right-4 z-10">
-                    <FavoriteButton
-                      isFavorite={favorites.has(listing.id)}
-                      onClick={(e) =>
-                        handleFavoriteToggle(
-                          listing.id,
-                          favorites.has(listing.id)
-                        )
-                      }
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-semibold text-white mb-3">
+                Find Your Perfect Cleaner
+              </h2>
+              <p className="text-gray-300 max-w-2xl mx-auto">
+                Browse our trusted network of professional cleaners.
+              </p>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-10 sticky top-4 z-40">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Search Input */}
+                <div>
+                  <label
+                    htmlFor="search"
+                    className="block text-sm font-medium text-gray-300 mb-1"
+                  >
+                    Search by Name or Service
+                  </label>
+                  <input
+                    id="search"
+                    type="text"
+                    placeholder="Search..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700 placeholder-gray-400"
+                  />
+                </div>
+                {/* Price Range */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Price Range ($/hr)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={minPrice}
+                      onChange={handleMinPriceChange}
+                      min="0"
+                      className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700 placeholder-gray-400"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={maxPrice}
+                      onChange={handleMaxPriceChange}
+                      min="0"
+                      className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700 placeholder-gray-400"
                     />
                   </div>
-                  <div className="h-56 bg-gradient-to-r from-gray-700 to-gray-800 flex items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-gray-700 shadow-md flex items-center justify-center">
-                      <span className="text-gray-400 text-3xl">👤</span>
-                    </div>
-                  </div>
-                  <div className="p-6 flex flex-col flex-grow">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h2 className="text-2xl font-semibold text-white">
-                          {listing.provider}
-                        </h2>
-                        <p className="text-gray-400 text-sm">
-                          {listing.location}
-                        </p>
-                      </div>
-                      <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap">
-                        ${listing.price}/hr
-                      </div>
-                    </div>
-                    <p className="text-gray-300 text-sm mb-3 flex-grow">
-                      {listing.title}: {listing.description}
-                    </p>
-                    <div className="flex items-center mb-4">
-                      <div className="flex text-yellow-400">
-                        {[...Array(5)].map((_, i) => (
-                          <svg
-                            key={i}
-                            className={`w-5 h-5 ${
-                              i < Math.floor(listing.rating)
-                                ? "text-yellow-400"
-                                : "text-gray-600"
-                            }`}
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                      </div>
-                      <span className="text-gray-400 ml-2">
-                        ({listing.rating.toFixed(1)})
-                      </span>
-                    </div>
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-200 mb-1">
-                        Services:
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {listing.services.map((serviceName) => (
-                          <span
-                            key={serviceName}
-                            className="bg-gray-700 text-gray-300 px-2 py-1 rounded-full text-xs"
-                          >
-                            {serviceName}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                </div>
+                {/* Rating Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Minimum Rating
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      value={minRating}
+                      onChange={handleRatingChange}
+                      className="w-full accent-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-300 w-12 text-center">
+                      {minRating.toFixed(1)}
+                    </span>
                   </div>
                 </div>
-              ))}
+                {/* Service Filter */}
+                <div>
+                  <label
+                    htmlFor="service"
+                    className="block text-sm font-medium text-gray-300 mb-1"
+                  >
+                    Cleaning Skill
+                  </label>
+                  <select
+                    id="service"
+                    value={selectedService}
+                    onChange={handleServiceChange}
+                    className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white bg-gray-700"
+                  >
+                    <option value="">All Skills</option>
+                    {availableServices.map((serviceName) => (
+                      <option
+                        key={serviceName}
+                        value={serviceName}
+                        className="text-gray-900 bg-white"
+                      >
+                        {serviceName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
-          </>
-        )}
 
-        {/* Pagination */}
-        {!loading && !error && totalCleaners > ITEMS_PER_PAGE && (
-          <div className="mt-12 flex justify-center gap-2">
-            {Array.from({ length: totalPages }).map((_, index) => (
-              <button
-                key={index}
-                disabled={currentPage === index + 1}
-                className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
-                  currentPage === index + 1
-                    ? "bg-blue-600 text-white cursor-default"
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-                onClick={() => setCurrentPage(index + 1)}
-              >
-                {index + 1}
-              </button>
-            ))}
-          </div>
+            {/* Status Messages and Cleaner Listings */}
+            <div className="mb-6 text-center">
+              {loading && (
+                <p className="text-gray-300 text-lg animate-pulse">
+                  Loading cleaners...
+                </p>
+              )}
+              {error && (
+                <p className="text-red-400 text-lg bg-red-900 bg-opacity-50 p-3 rounded-md">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {!loading && !error && totalCleaners === 0 && (
+              <p className="text-gray-400 text-center text-xl py-10">
+                No cleaners found matching your criteria or available at the
+                moment.
+              </p>
+            )}
+
+            {!loading && !error && displayedCleaners.length > 0 && (
+              <>
+                <p className="text-gray-300 text-center mb-6">
+                  Showing {displayedCleaners.length} of {totalCleaners} cleaners
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {displayedCleaners.map((listing: CleaningService) => (
+                    <div
+                      key={listing.id}
+                      className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col cursor-pointer relative"
+                      onClick={() => handleCardClick(listing)}
+                    >
+                      {/* Add favorite button to top-right corner */}
+                      <div className="absolute top-4 right-4 z-10">
+                        <FavoriteButton
+                          isFavorite={favorites.has(listing.id)}
+                          onClick={(e) =>
+                            handleFavoriteToggle(
+                              listing.id,
+                              favorites.has(listing.id)
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="h-56 bg-gradient-to-r from-gray-700 to-gray-800 flex items-center justify-center">
+                        <div className="w-24 h-24 rounded-full bg-gray-700 shadow-md flex items-center justify-center">
+                          <span className="text-gray-400 text-3xl">👤</span>
+                        </div>
+                      </div>
+                      <div className="p-6 flex flex-col flex-grow">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h2 className="text-2xl font-semibold text-white">
+                              {listing.provider}
+                            </h2>
+                            <p className="text-gray-400 text-sm">
+                              {listing.location}
+                            </p>
+                          </div>
+                          <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap">
+                            ${listing.price}/hr
+                          </div>
+                        </div>
+                        <p className="text-gray-300 text-sm mb-3 flex-grow">
+                          {listing.title}: {listing.description}
+                        </p>
+                        <div className="flex items-center mb-4">
+                          <div className="flex text-yellow-400">
+                            {[...Array(5)].map((_, i) => (
+                              <svg
+                                key={i}
+                                className={`w-5 h-5 ${
+                                  i < Math.floor(listing.rating)
+                                    ? "text-yellow-400"
+                                    : "text-gray-600"
+                                }`}
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                            ))}
+                          </div>
+                          <span className="text-gray-400 ml-2">
+                            ({listing.rating.toFixed(1)})
+                          </span>
+                        </div>
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-200 mb-1">
+                            Services:
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {listing.services.map((serviceName) => (
+                              <span
+                                key={serviceName}
+                                className="bg-gray-700 text-gray-300 px-2 py-1 rounded-full text-xs"
+                              >
+                                {serviceName}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Pagination */}
+            {!loading && !error && totalCleaners > ITEMS_PER_PAGE && (
+              <div className="mt-12 flex justify-center gap-2">
+                {Array.from({ length: totalPages }).map((_, index) => (
+                  <button
+                    key={index}
+                    disabled={currentPage === index + 1}
+                    className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
+                      currentPage === index + 1
+                        ? "bg-blue-600 text-white cursor-default"
+                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    }`}
+                    onClick={() => setCurrentPage(index + 1)}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <JobsTab />
         )}
       </div>
       <CleanerModal
