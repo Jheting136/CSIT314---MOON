@@ -248,7 +248,7 @@ export class listingModel {
         service: service,
         location: location,
         date: date,
-        status: "pending", // Initial status
+        status: "Pending", // Initial status
       });
 
       return booking.id;

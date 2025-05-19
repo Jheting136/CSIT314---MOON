@@ -117,7 +117,7 @@ export class listingController {
 
   static async markJobCompleted(jobId: string): Promise<void> {
     try {
-      await listingModel.updateJobStatus(jobId, "completed");
+      await listingModel.updateJobStatus(jobId, "Completed");
     } catch (error) {
       console.error("[ListingController] Error in markJobCompleted:", error);
       throw error instanceof Error
@@ -131,7 +131,7 @@ export class listingController {
     report?: { reason: string }
   ): Promise<void> {
     try {
-      await listingModel.updateJobStatus(jobId, "completed");
+      await listingModel.updateJobStatus(jobId, "Completed");
 
       if (report) {
         const reporterId = localStorage.getItem("userId");
