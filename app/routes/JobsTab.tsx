@@ -148,8 +148,16 @@ export function JobsTab() {
   if (error)
     return <div className="text-red-500 text-center py-8">{error}</div>;
 
-  const pendingJobs = jobs.filter((job) => job.status === "pending");
-  const completedJobs = jobs.filter((job) => job.status === "completed");
+  const pendingJobs = jobs.filter(
+    (job) => job.status === "Pending" || job.status === "Approved"
+  );
+  const completedJobs = jobs.filter(
+    (job) =>
+      job.status === "Completed" ||
+      job.status === "completed" ||
+      job.status === "cancelled" ||
+      job.status === "Rejected"
+  );
 
   const handleJobComplete = (jobId: string) => {
     setCompletingJobId(jobId);
