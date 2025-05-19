@@ -12,7 +12,7 @@ export interface History {
   customer_name: string;
 }
 
-export async function getHistory(id: string): Promise<History[]> {
+export async function getHistory(id: string, filters: Array<{ column: string; operator: string; value: string }>): Promise<History[]> {
   // Step 1: Retrieve account_type from 'users' table
   const { data: userData, error: userError } = await commonModel.getData(
     'users',
@@ -38,11 +38,14 @@ export async function getHistory(id: string): Promise<History[]> {
     throw new Error(`Unsupported account type: ${accountType}`);
   }
 
-  // Step 3: Fetch job history from 'jobs' table
+  const baseFilters = [{ column: filterColumn, operator: 'eq', value: id }];
+
+  const allFilters = [...baseFilters, ...filters];
+
   const { data: jobData, error: jobError } = await commonModel.getData(
     'jobs',
     'id, service, location, date, status, rating',
-    [{ column: filterColumn, operator: 'eq', value: id }],
+    allFilters,
     1,
     10
   );

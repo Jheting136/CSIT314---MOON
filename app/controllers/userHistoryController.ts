@@ -1,8 +1,8 @@
 import { getHistory, type HistoryItem } from '../models/userHistoryModel';
 
 export class UserHistoryController {
-  static async getHistory(id: string): Promise<history[]> {
-    return await getHistory(id);
+  static async getHistory(id: string, filters: Array<{ column: string; operator: string; value: string }>): Promise<history[]> {
+    return await getHistory(id,filters);
   }
 }
 
