@@ -2,18 +2,18 @@
 // This controller manages the logic and data interactions for the Cleaner's main dashboard page.
 
 // --- Core Imports ---
-import { supabase } from '../lib/supabaseClient'; // Supabase client for direct DB access where models aren't fully fleshed out yet
+import { supabase } from "../lib/supabaseClient"; // Supabase client for direct DB access where models aren't fully fleshed out yet
 
 // --- Type Imports from other Controllers (for data consistency) ---
-import type { User } from './viewUserProfileController'; // Represents the main user data structure
+import type { User } from "./viewUserProfileController"; // Represents the main user data structure
 
 // --- Type Imports from Models (to be re-exported for the Boundary) ---
-import type { PortfolioImage as ModelPortfolioImage } from '../models/portfolioImage';
-import type { History as ModelJobHistoryItem } from '../models/userHistoryModel'; // 'History' is the job item type
+import type { PortfolioImage as ModelPortfolioImage } from "../models/portfolioImage";
+import type { History as ModelJobHistoryItem } from "../models/userHistoryModel"; // 'History' is the job item type
 
 // --- Service Imports (Controllers can use Services as part of their logic) ---
-import { UserProfileService } from '../services/UserProfileServices';
-import { JobService } from '../services/JobServices';
+import { UserProfileService } from "../services/UserProfileServices";
+import { JobService } from "../services/JobServices";
 // Note: PortfolioController is used directly by the Boundary in this example,
 // as it's already a controller.
 
@@ -47,7 +47,9 @@ export class CleanerDashboardController {
   constructor(userId: string) {
     if (!userId) {
       // It's crucial to handle cases where userId might be missing early.
-      throw new Error("User ID is required to initialize CleanerDashboardController.");
+      throw new Error(
+        "User ID is required to initialize CleanerDashboardController."
+      );
     }
     this.userId = userId;
     // Instantiate services needed by this controller
@@ -66,9 +68,35 @@ export class CleanerDashboardController {
     const [userData, shortlistCount, completedJobCount] = await Promise.all([
       this.userProfileService.fetchUserData(),
       this.userProfileService.getShortlistCount(),
-      this.fetchCompletedJobCountInternal() // Internal helper for direct DB query
+      this.fetchCompletedJobCountInternal(), // Internal helper for direct DB query
     ]);
     return { userData, shortlistCount, completedJobCount };
+  }
+
+  async getViewCount(): Promise<number> {
+    const { count, error } = await supabase
+      .from("cleaner_views")
+      .select("*", { count: "exact", head: true })
+      .eq("cleaner_id", this.userId);
+
+    if (error) {
+      console.error("Error fetching view count:", error.message);
+      throw new Error(`Failed to fetch view count: ${error.message}`);
+    }
+    return count || 0;
+  }
+
+  async getFavoriteCount(): Promise<number> {
+    const { count, error } = await supabase
+      .from("cleaner_favorites")
+      .select("*", { count: "exact", head: true })
+      .eq("cleaner_id", this.userId);
+
+    if (error) {
+      console.error("Error fetching favorite count:", error.message);
+      throw new Error(`Failed to fetch favorite count: ${error.message}`);
+    }
+    return count || 0;
   }
 
   /**
@@ -92,13 +120,16 @@ export class CleanerDashboardController {
    */
   private async fetchCompletedJobCountInternal(): Promise<number> {
     const { count, error } = await supabase
-      .from('jobs')
-      .select('*', { count: 'exact', head: true }) // 'head: true' makes it a HEAD request, only fetching count
-      .eq('cleaner_id', this.userId)
-      .eq('status', 'Completed');
+      .from("jobs")
+      .select("*", { count: "exact", head: true }) // 'head: true' makes it a HEAD request, only fetching count
+      .eq("cleaner_id", this.userId)
+      .eq("status", "Completed");
 
     if (error) {
-      console.error("CleanerDashboardController: Error fetching completed job count:", error.message);
+      console.error(
+        "CleanerDashboardController: Error fetching completed job count:",
+        error.message
+      );
       throw new Error(`Failed to fetch completed job count: ${error.message}`);
     }
     return count || 0;
@@ -112,13 +143,16 @@ export class CleanerDashboardController {
    */
   async getCurrentAvailability(): Promise<AvailabilityRecord[]> {
     const { data, error } = await supabase
-      .from('availability')
-      .select('*')
-      .eq('cleaner_id', this.userId)
-      .order('date', { ascending: true });
+      .from("availability")
+      .select("*")
+      .eq("cleaner_id", this.userId)
+      .order("date", { ascending: true });
 
     if (error) {
-      console.error("CleanerDashboardController: Error fetching availability:", error.message);
+      console.error(
+        "CleanerDashboardController: Error fetching availability:",
+        error.message
+      );
       throw new Error(`Failed to load availability: ${error.message}`);
     }
     return (data as AvailabilityRecord[]) || []; // Cast to ensure type safety
@@ -134,18 +168,21 @@ export class CleanerDashboardController {
       throw new Error("Service(s) and date are required to save availability.");
     }
     // Further validation (e.g., against STANDARD_SERVICES) could be done here or in the Boundary.
-    const recordsToInsert = services.map(service => ({
+    const recordsToInsert = services.map((service) => ({
       cleaner_id: this.userId,
       service,
       date,
     }));
 
     const { error } = await supabase
-      .from('availability')
+      .from("availability")
       .insert(recordsToInsert);
 
     if (error) {
-      console.error("CleanerDashboardController: Error saving availability:", error.message);
+      console.error(
+        "CleanerDashboardController: Error saving availability:",
+        error.message
+      );
       throw new Error(`Failed to save availability: ${error.message}`);
     }
   }
@@ -156,13 +193,16 @@ export class CleanerDashboardController {
    */
   async deleteAvailability(availabilityId: string): Promise<void> {
     const { error } = await supabase
-      .from('availability')
+      .from("availability")
       .delete()
-      .eq('id', availabilityId)
-      .eq('cleaner_id', this.userId); // Security: Ensure cleaner only deletes their own slots
+      .eq("id", availabilityId)
+      .eq("cleaner_id", this.userId); // Security: Ensure cleaner only deletes their own slots
 
     if (error) {
-      console.error("CleanerDashboardController: Error deleting availability:", error.message);
+      console.error(
+        "CleanerDashboardController: Error deleting availability:",
+        error.message
+      );
       throw new Error(`Failed to delete availability: ${error.message}`);
     }
   }
@@ -178,11 +218,15 @@ export class CleanerDashboardController {
    * @returns {Promise<JobHistoryItem[]>} A list of completed job history items.
    */
   async getWorkHistory(
-    sortOrder: 'asc' | 'desc',
+    sortOrder: "asc" | "desc",
     serviceFilter?: string,
     dateRange?: { start: string; end: string }
   ): Promise<JobHistoryItem[]> {
-    return this.jobService.fetchCompletedJobs(sortOrder, serviceFilter, dateRange);
+    return this.jobService.fetchCompletedJobs(
+      sortOrder,
+      serviceFilter,
+      dateRange
+    );
   }
 
   /**
@@ -191,7 +235,7 @@ export class CleanerDashboardController {
    * @param {'asc' | 'desc'} sortOrder - The order to sort bookings by date.
    * @returns {Promise<JobHistoryItem[]>} A list of booking items.
    */
-  async getBookings(sortOrder: 'asc' | 'desc'): Promise<JobHistoryItem[]> {
+  async getBookings(sortOrder: "asc" | "desc"): Promise<JobHistoryItem[]> {
     return this.jobService.fetchBookings(sortOrder);
   }
 
@@ -203,13 +247,16 @@ export class CleanerDashboardController {
   async updateJobStatus(jobId: string, newStatus: string): Promise<void> {
     // This could also be a method in JobService for better encapsulation of job-related logic.
     const { error } = await supabase
-      .from('jobs')
+      .from("jobs")
       .update({ status: newStatus })
-      .eq('id', jobId)
-      .eq('cleaner_id', this.userId); // Security: Ensure cleaner updates only their jobs
+      .eq("id", jobId)
+      .eq("cleaner_id", this.userId); // Security: Ensure cleaner updates only their jobs
 
     if (error) {
-      console.error("CleanerDashboardController: Error updating job status:", error.message);
+      console.error(
+        "CleanerDashboardController: Error updating job status:",
+        error.message
+      );
       throw new Error(`Failed to update job status: ${error.message}`);
     }
   }
@@ -224,7 +271,7 @@ export class CleanerDashboardController {
     // JobService already encapsulates the logic for reporting a job.
     return this.jobService.reportJob(jobId, reason);
   }
-  
+
   /**
    * Fetches a list of services the cleaner can offer or has offered.
    * This can be used to populate service selection dropdowns.

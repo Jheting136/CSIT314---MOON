@@ -26,6 +26,8 @@ type SortOption = "date-desc" | "date-asc" | "service-asc" | "service-desc";
 
 const CleanerPage: React.FC = () => {
   const [userId, setUserId] = useState<string>("");
+  const [favoriteCount, setFavoriteCount] = useState<number | null>(0);
+  const [viewCount, setViewCount] = useState<number | null>(0);
   const [controller, setController] =
     useState<CleanerDashboardController | null>(null);
   const [activeTab, setActiveTab] = useState<
@@ -97,6 +99,8 @@ const CleanerPage: React.FC = () => {
           setUserData(profileData.userData);
           setBioDraft(profileData.userData?.bio || "");
           setShortlistCount(profileData.shortlistCount);
+          setFavoriteCount(await controller.getFavoriteCount()); // Set favorite count
+          setViewCount(await controller.getViewCount()); // Set view count
           setCompletedJobCount(profileData.completedJobCount);
           const imagesForProfile = await PortfolioController.fetchImages(
             userId
@@ -365,10 +369,16 @@ const CleanerPage: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Cleaner Profile</h2>
               <div className="flex items-center">
-                {shortlistCount !== null && (
-                  <div className="mr-4 bg-blue-600 px-3 py-1 rounded-full flex items-center text-sm">
-                    <span className="mr-1">⭐</span>
-                    <span>{shortlistCount} shortlists</span>
+                {favoriteCount !== null && (
+                  <div className="bg-pink-600/30 px-3 py-1 rounded-full flex items-center text-sm">
+                    <span className="mr-1">❤️</span>
+                    <span>{favoriteCount} favorites</span>
+                  </div>
+                )}
+                {viewCount !== null && (
+                  <div className="bg-blue-600/30 px-3 py-1 rounded-full flex items-center text-sm">
+                    <span className="mr-1">👁️</span>
+                    <span>{viewCount} views</span>
                   </div>
                 )}
                 <button
@@ -484,10 +494,16 @@ const CleanerPage: React.FC = () => {
                   Profile Statistics
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-blue-900/30 p-3 rounded-lg">
-                    <p className="text-gray-400">Times Shortlisted</p>
+                  <div className="bg-pink-900/30 p-3 rounded-lg">
+                    <p className="text-gray-400">Favorites</p>
                     <p className="text-2xl font-bold">
-                      {shortlistCount !== null ? shortlistCount : "N/A"}
+                      {favoriteCount !== null ? favoriteCount : "N/A"}
+                    </p>
+                  </div>
+                  <div className="bg-blue-900/30 p-3 rounded-lg">
+                    <p className="text-gray-400">Profile Views</p>
+                    <p className="text-2xl font-bold">
+                      {viewCount !== null ? viewCount : "N/A"}
                     </p>
                   </div>
                   <div className="bg-green-900/30 p-3 rounded-lg">

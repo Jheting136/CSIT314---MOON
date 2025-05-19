@@ -233,4 +233,65 @@ export class listingModel {
           );
     }
   }
+
+  static async createBooking(
+    cleanerId: string,
+    homeownerId: string,
+    service: string,
+    location: string,
+    date: Date
+  ): Promise<string> {
+    try {
+      const booking = await commonModel.insertData("jobs", {
+        cleaner_id: cleanerId,
+        homeowner_id: homeownerId,
+        service: service,
+        location: location,
+        date: date,
+        status: "pending", // Initial status
+      });
+
+      return booking.id;
+    } catch (error) {
+      console.error("[ListingModel] Error creating booking:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("An unexpected error occurred while creating the booking");
+    }
+  }
+
+  static async getJobs(userId: string): Promise<any[]> {
+    try {
+      const jobs = await commonModel.getData(
+        "jobs",
+        `
+          id,
+          cleaner_id,
+          service,
+          location,
+          date,
+          status,
+          rating,
+          users!jobs_cleaner_id_fkey (name)
+        `,
+        [{ column: "homeowner_id", operator: "eq", value: userId }],
+        1, // page
+        100 // pageSize - adjust as needed
+      );
+
+      return jobs.data;
+    } catch (error) {
+      console.error("[ListingModel] Error fetching jobs:", error);
+      throw error;
+    }
+  }
+
+  static async updateJobStatus(jobId: string, status: string): Promise<void> {
+    try {
+      await commonModel.updateRow("jobs", jobId, { status });
+    } catch (error) {
+      console.error("[ListingModel] Error updating job status:", error);
+      throw error;
+    }
+  }
 }
