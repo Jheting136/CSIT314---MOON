@@ -294,4 +294,26 @@ export class listingModel {
       throw error;
     }
   }
+
+  static async createJobReport(
+    jobId: string,
+    reporterId: string,
+    reason: string
+  ): Promise<void> {
+    try {
+      await commonModel.insertData("job_reports", {
+        job_id: jobId,
+        reporter_id: reporterId,
+        reason: reason,
+        // resolved and resolved_at will be handled by admin later
+      });
+    } catch (error) {
+      console.error("[ListingModel] Error creating job report:", error);
+      throw error instanceof Error
+        ? error
+        : new Error(
+            "An unexpected error occurred while creating the job report"
+          );
+    }
+  }
 }

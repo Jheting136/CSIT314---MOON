@@ -13,10 +13,109 @@ interface Job {
   };
 }
 
+interface CompletionModalProps {
+  jobId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onComplete: () => void;
+}
+
+function CompletionModal({
+  jobId,
+  isOpen,
+  onClose,
+  onComplete,
+}: CompletionModalProps) {
+  const [includeReport, setIncludeReport] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    try {
+      await listingController.markJobCompletedWithReport(
+        jobId,
+        includeReport ? { reason: reportReason } : undefined
+      );
+      onComplete();
+      onClose();
+    } catch (error) {
+      setError("Failed to complete job. Please try again.");
+      console.error("Error completing job:", error);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-800 rounded-xl max-w-md w-full p-6">
+        <h2 className="text-2xl font-bold text-white mb-4">Complete Job</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="includeReport"
+              checked={includeReport}
+              onChange={(e) => setIncludeReport(e.target.checked)}
+              className="w-4 h-4 bg-gray-700 border-gray-600 rounded"
+            />
+            <label htmlFor="includeReport" className="text-gray-300">
+              Include a job report
+            </label>
+          </div>
+
+          {includeReport && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Report Details
+              </label>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Describe any issues or concerns..."
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                rows={4}
+                required={includeReport}
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="text-red-400 bg-red-900 bg-opacity-20 p-3 rounded">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Complete Job
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function JobsTab() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [completingJobId, setCompletingJobId] = useState<string | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -52,6 +151,10 @@ export function JobsTab() {
   const pendingJobs = jobs.filter((job) => job.status === "pending");
   const completedJobs = jobs.filter((job) => job.status === "completed");
 
+  const handleJobComplete = (jobId: string) => {
+    setCompletingJobId(jobId);
+  };
+
   return (
     <div className="space-y-8">
       {/* Pending Jobs Section */}
@@ -73,7 +176,7 @@ export function JobsTab() {
                     </p>
                   </div>
                   <button
-                    onClick={() => handleMarkCompleted(job.id)}
+                    onClick={() => handleJobComplete(job.id)}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
                   >
                     Mark Completed
@@ -113,6 +216,16 @@ export function JobsTab() {
           </div>
         )}
       </div>
+
+      <CompletionModal
+        jobId={completingJobId || ""}
+        isOpen={!!completingJobId}
+        onClose={() => setCompletingJobId(null)}
+        onComplete={async () => {
+          await loadJobs(); // Reload jobs after completion
+          setCompletingJobId(null);
+        }}
+      />
     </div>
   );
 }

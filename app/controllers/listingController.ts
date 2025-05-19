@@ -125,4 +125,31 @@ export class listingController {
         : new Error("An unexpected error occurred while updating job status");
     }
   }
+
+  static async markJobCompletedWithReport(
+    jobId: string,
+    report?: { reason: string }
+  ): Promise<void> {
+    try {
+      await listingModel.updateJobStatus(jobId, "completed");
+
+      if (report) {
+        const reporterId = localStorage.getItem("userId");
+        if (!reporterId) {
+          throw new Error("User ID not found");
+        }
+        await listingModel.createJobReport(jobId, reporterId, report.reason);
+      }
+    } catch (error) {
+      console.error(
+        "[ListingController] Error in markJobCompletedWithReport:",
+        error
+      );
+      throw error instanceof Error
+        ? error
+        : new Error(
+            "An unexpected error occurred while updating job status and creating report"
+          );
+    }
+  }
 }
