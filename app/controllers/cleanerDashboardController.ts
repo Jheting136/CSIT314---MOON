@@ -236,7 +236,31 @@ export class CleanerDashboardController {
    * @returns {Promise<JobHistoryItem[]>} A list of booking items.
    */
   async getBookings(sortOrder: "asc" | "desc"): Promise<JobHistoryItem[]> {
-    return this.jobService.fetchBookings(sortOrder);
+    const { data, error } = await supabase
+      .from("jobs")
+      .select(
+        `
+      *,
+      users!jobs_homeowner_id_fkey (
+        name,
+        email
+      )
+    `
+      )
+      .eq("cleaner_id", this.userId)
+      .not("status", "eq", "Completed") // Get all non-completed jobs
+      .order("date", { ascending: sortOrder === "asc" });
+
+    if (error) {
+      console.error("Error fetching bookings:", error.message);
+      throw new Error(`Failed to fetch bookings: ${error.message}`);
+    }
+
+    // Transform the data to include customer name
+    return (data || []).map((job) => ({
+      ...job,
+      customer_name: job.users?.name || "Unknown",
+    }));
   }
 
   /**

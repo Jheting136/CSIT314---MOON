@@ -516,13 +516,10 @@ const CleanerPage: React.FC = () => {
           </div>
         );
 
-      case "Work Completed":
       case "bookings":
-        const listTitleJobs =
-          activeTab === "Work Completed" ? "Completed Jobs" : "Your Bookings";
         return (
           <div className="max-w-6xl mx-auto text-white">
-            <h2 className="text-2xl font-bold mb-6">{listTitleJobs}</h2>
+            <h2 className="text-2xl font-bold mb-6">Your Bookings</h2>
             <div className="flex justify-start items-center mb-6">
               <span className="text-sm text-gray-300 mr-2">Sort by:</span>
               <select
@@ -538,14 +535,11 @@ const CleanerPage: React.FC = () => {
                 <option value="service-desc">Service: Z-A</option>
               </select>
             </div>
-            {jobsForDisplay.length === 0 && (
+            {jobsForDisplay.length === 0 ? (
               <p className="text-gray-400 text-center py-8">
-                No{" "}
-                {activeTab === "Work Completed" ? "completed jobs" : "bookings"}{" "}
-                found.
+                No bookings found.
               </p>
-            )}
-            {jobsForDisplay.length > 0 && (
+            ) : (
               <div className="space-y-4">
                 {jobsForDisplay.map((job) => (
                   <div
@@ -562,7 +556,7 @@ const CleanerPage: React.FC = () => {
                           {new Date(job.date).toLocaleString()}
                         </p>
                         <p className="text-sm text-gray-300 mt-1">
-                          Customer: {job.customer_name || "Unknown"}
+                          Customer: {job.customer_name}
                         </p>
                       </div>
                       <span
@@ -573,14 +567,13 @@ const CleanerPage: React.FC = () => {
                             ? "bg-green-900 text-green-300"
                             : job.status === "Rejected"
                             ? "bg-red-900 text-red-300"
-                            : job.status === "Cancelled"
-                            ? "bg-gray-700 text-gray-300"
-                            : "bg-blue-900 text-blue-300"
+                            : "bg-gray-700 text-gray-300"
                         }`}
                       >
                         {job.status}
                       </span>
                     </div>
+
                     <div className="mt-3 flex space-x-2">
                       {job.status === "Pending" && (
                         <>
@@ -590,7 +583,7 @@ const CleanerPage: React.FC = () => {
                             }
                             className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
                           >
-                            Approve
+                            Accept
                           </button>
                           <button
                             onClick={() =>
@@ -598,7 +591,7 @@ const CleanerPage: React.FC = () => {
                             }
                             className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
                           >
-                            Reject
+                            Decline
                           </button>
                         </>
                       )}
@@ -606,29 +599,28 @@ const CleanerPage: React.FC = () => {
                         <>
                           <button
                             onClick={() =>
+                              handleUpdateJobStatus(job.id, "Completed")
+                            }
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Mark Complete
+                          </button>
+                          <button
+                            onClick={() =>
                               handleUpdateJobStatus(job.id, "Cancelled")
                             }
                             className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm"
                           >
-                            Cancel Job
-                          </button>
-                          <button
-                            onClick={() => handleReportJob(job.id)}
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
-                          >
-                            Report Client
+                            Cancel
                           </button>
                         </>
                       )}
-                      {job.status === "Completed" &&
-                        activeTab === "Work Completed" && (
-                          <button
-                            onClick={() => handleReportJob(job.id)}
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
-                          >
-                            Report Issue
-                          </button>
-                        )}
+                      <button
+                        onClick={() => handleReportJob(job.id)}
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Report Issue
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -636,7 +628,6 @@ const CleanerPage: React.FC = () => {
             )}
           </div>
         );
-
       case "portfolio":
         if (!userId) {
           return (
